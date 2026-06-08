@@ -1,0 +1,143 @@
+{
+  "uid": "erp-stock-levels",
+  "title": "ERP – Stock & Inventory",
+  "tags": ["erp", "inventory"],
+  "schemaVersion": 30,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HTTP Requests / min – Inventory Service",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus-ds" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "targets": [
+        {
+          "expr": "rate(http_server_requests_seconds_count{job=\"inventory-service\"}[1m]) * 60",
+          "legendFormat": "req/min"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "P95 Latency – Inventory (ms)",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus-ds" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "thresholds": {
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 200 },
+            { "color": "red", "value": 500 }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{job=\"inventory-service\"}[5m])) * 1000",
+          "legendFormat": "p95 ms"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "RabbitMQ Messages Queued",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus-ds" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "thresholds": {
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50 },
+            { "color": "red", "value": 200 }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "rabbitmq_queue_messages{queue=\"inventory.livraison.confirmed\"}",
+          "legendFormat": "queued"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "RabbitMQ Messages Delivered/s",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus-ds" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "expr": "rate(rabbitmq_channel_messages_delivered_total[1m])",
+          "legendFormat": "delivered/s"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Inventory Service – Request Latency Percentiles",
+      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
+      "datasource": { "uid": "prometheus-ds" },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(http_server_requests_seconds_bucket{job=\"inventory-service\"}[5m])) * 1000",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{job=\"inventory-service\"}[5m])) * 1000",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{job=\"inventory-service\"}[5m])) * 1000",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "RabbitMQ – Message Rates",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "rate(rabbitmq_channel_messages_published_total[1m])",
+          "legendFormat": "published/s"
+        },
+        {
+          "expr": "rate(rabbitmq_channel_messages_delivered_total[1m])",
+          "legendFormat": "delivered/s"
+        },
+        {
+          "expr": "rate(rabbitmq_channel_messages_redelivered_total[1m])",
+          "legendFormat": "redelivered/s"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "JVM GC Pause Duration – Inventory (ms)",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus-ds" },
+      "targets": [
+        {
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"inventory-service\"}[1m]) * 1000",
+          "legendFormat": "{{cause}}"
+        }
+      ]
+    }
+  ]
+}

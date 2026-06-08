@@ -1,0 +1,53 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: warn
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Keep only ERP containers
+      - source_labels: [__meta_docker_container_name]
+        regex: '/erp-.*'
+        action: keep
+      # Strip leading slash from container name
+      - source_labels: [__meta_docker_container_name]
+        regex: '/(.*)'
+        replacement: '$1'
+        target_label: container
+      # Add compose service label
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      # Add compose project label
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: compose_project
+
+    pipeline_stages:
+      # Try to parse JSON logs (Spring Boot docker profile)
+      - json:
+          expressions:
+            log_level: level
+            log_logger: logger_name
+            log_tenant: tenantId
+            log_request_id: requestId
+            log_trace_id: traceId
+            log_message: message
+      # Promote extracted fields as Loki labels
+      - labels:
+          level: log_level
+      # Use extracted message as the log line if available; otherwise use raw line
+      - output:
+          source: log_message

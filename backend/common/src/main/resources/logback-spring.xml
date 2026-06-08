@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <springProfile name="docker">
+    <!-- JSON structured logs for log aggregation (Loki / ELK) -->
+    <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+        <fieldNames>
+          <timestamp>timestamp</timestamp>
+          <message>message</message>
+          <logger>logger</logger>
+          <thread>thread</thread>
+          <level>level</level>
+        </fieldNames>
+        <includeMdcKeyName>requestId</includeMdcKeyName>
+        <includeMdcKeyName>tenantId</includeMdcKeyName>
+        <shortenedLoggerNameLength>36</shortenedLoggerNameLength>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="JSON_STDOUT"/>
+    </root>
+    <logger name="com.erp" level="INFO"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+  </springProfile>
+
+  <springProfile name="!docker">
+    <!-- Human-readable logs for local dev -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} [tid=%mdc{tenantId:-—} rid=%mdc{requestId:-—}] - %msg%n</pattern>
+      </encoder>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="STDOUT"/>
+    </root>
+    <logger name="com.erp" level="DEBUG"/>
+    <logger name="org.springframework.security" level="WARN"/>
+  </springProfile>
+
+</configuration>

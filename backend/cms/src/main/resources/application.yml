@@ -1,0 +1,62 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: cms-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/erp_db}
+    username: ${SPRING_DATASOURCE_USERNAME:erp}
+    password: ${SPRING_DATASOURCE_PASSWORD:erp_secret}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
+
+  flyway:
+    enabled: true
+    table: flyway_cms_history
+    locations: classpath:db/cms
+    baseline-on-migrate: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180}/realms/erp
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/erp/protocol/openid-connect/certs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
+
+seaweedfs:
+  filer:
+    url: ${SEAWEEDFS_FILER_URL:http://seaweed-filer:8888}
+
+logging:
+  level:
+    com.erp: DEBUG

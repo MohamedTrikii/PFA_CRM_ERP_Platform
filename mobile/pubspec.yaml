@@ -1,0 +1,63 @@
+name: erp_mobile
+description: ERP Platform – Flutter mobile app (warehouse, CRM, offline-first)
+publish_to: none
+version: 0.0.1+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Networking
+  dio: ^5.4.3+1
+
+  # Auth – Keycloak OIDC
+  flutter_appauth: ^7.0.0
+
+  # Local DB (offline-first)
+  drift: ^2.18.0
+  sqlite3_flutter_libs: ^0.5.24
+
+  # Barcode / QR scanning
+  mobile_scanner: ^5.1.1
+
+  # OCR (document scan)
+  google_mlkit_text_recognition: ^0.13.0
+
+  # Charts
+  fl_chart: ^0.68.0
+
+  # UI
+  material_color_utilities: ^0.11.1
+  cached_network_image: ^3.3.1
+  intl: ^0.19.0
+  signature: ^5.5.0
+  pdf: ^3.11.1
+  printing: ^5.11.1
+  image_picker: ^1.0.7
+
+  # Utilities
+  shared_preferences: ^2.2.3
+  path_provider: ^2.1.3
+  path: ^1.9.0
+  logger: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  drift_dev: ^2.18.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/

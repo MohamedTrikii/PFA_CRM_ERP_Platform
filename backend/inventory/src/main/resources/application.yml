@@ -1,0 +1,62 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: inventory-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/erp_db}
+    username: ${SPRING_DATASOURCE_USERNAME:erp}
+    password: ${SPRING_DATASOURCE_PASSWORD:erp_secret}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/inventory
+    table: flyway_inventory_history
+    baseline-on-migrate: false
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:erp}
+    password: ${RABBITMQ_PASSWORD:erp_secret}
+    virtual-host: erp
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180}/realms/erp
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/erp/protocol/openid-connect/certs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
+
+erp:
+  rabbitmq:
+    exchange: erp.events
+    queue:
+      livraison-confirmed: inventory.livraison.confirmed

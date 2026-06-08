@@ -1,0 +1,67 @@
+# ── Secrets & credentials ─────────────────────
+.env
+*.env.local
+*.pem
+*.key
+token.json
+*.keystore
+*.jks
+mobile/android/key.properties
+
+# ── Java / Maven ─────────────────────────────
+target/
+*.class
+*.jar
+!backend/**/src/**/*.jar
+.mvn/wrapper/maven-wrapper.jar
+.flattened-pom.xml
+
+# ── Node / Angular ───────────────────────────
+node_modules/
+dist/
+.angular/
+.cache/
+
+# ── Python ───────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+mlruns/
+mlartifacts/
+
+# ── Flutter / Dart ───────────────────────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+build/
+*.g.dart
+*.freezed.dart
+mobile/android/local.properties
+mobile/android/.gradle/
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+
+# ── Docker volumes (if bind-mounted locally) ─
+infra/data/
+
+# ── IDE ───────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────
+*.log
+logs/
+
+# ── Nested repo clone (à ne pas versionner) ───
+PFA_CRM_ERP_Platform/
+
+# ── Claude Code internal files ────────────────
+.claude/

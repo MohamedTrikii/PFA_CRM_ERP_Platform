@@ -1,0 +1,218 @@
+{
+  "realm": "erp",
+  "enabled": true,
+  "displayName": "ERP Platform",
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "refreshTokenMaxReuse": 0,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 2592000,
+  "roles": {
+    "realm": [
+      {
+        "name": "SUPER_ADMIN",
+        "description": "Full platform access across all tenants"
+      },
+      {
+        "name": "EMPLOYER",
+        "description": "Tenant admin – manages own company"
+      },
+      {
+        "name": "EMPLOYEE",
+        "description": "Staff member scoped to their company & function"
+      },
+      {
+        "name": "CLIENT",
+        "description": "End customer – sees only their own data"
+      },
+      {
+        "name": "offline_access",
+        "description": "Allow offline tokens / refresh tokens"
+      }
+    ]
+  },
+  "defaultRoles": [
+    "CLIENT"
+  ],
+  "requiredCredentials": [
+    "password"
+  ],
+  "registrationFlow": "registration",
+  "resetCredentialsFlow": "reset credentials",
+  "browserFlow": "browser",
+  "clients": [
+    {
+      "clientId": "erp-web",
+      "name": "ERP Web Application",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:4200/*",
+        "http://localhost:4200/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:4200"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4200/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant-id-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "tenant_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "erp-mobile",
+      "name": "ERP Mobile App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "com.erp.mobile:/oauthredirect"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "erp-backend",
+      "name": "ERP Backend Services",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "change-me-in-prod",
+      "attributes": {}
+    }
+  ],
+  "users": [
+    {
+      "username": "superadmin",
+      "firstName": "Super",
+      "lastName": "Admin",
+      "email": "superadmin@erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "SuperAdmin@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "SUPER_ADMIN",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      }
+    },
+    {
+      "username": "demo-employer",
+      "firstName": "Demo",
+      "lastName": "Employer",
+      "email": "employer@demo.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Employer@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "EMPLOYER",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000002"
+        ]
+      }
+    },
+    {
+      "username": "demo-employee",
+      "firstName": "Demo",
+      "lastName": "Employee",
+      "email": "employee@demo.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Employee@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "EMPLOYEE",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000002"
+        ]
+      }
+    },
+    {
+      "username": "demo-client",
+      "firstName": "Demo",
+      "lastName": "Client",
+      "email": "client@demo.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Client@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CLIENT",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000002"
+        ]
+      }
+    }
+  ]
+}
