@@ -1,6 +1,5 @@
 package com.erp.sales.service;
 
-import com.erp.common.tenant.TenantContext;
 import com.erp.sales.domain.DevisAttachment;
 import com.erp.sales.dto.AttachmentDto;
 import com.erp.sales.repository.DevisAttachmentRepository;
@@ -75,7 +74,7 @@ public class AttachmentService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 
     private static UUID currentUserId() {

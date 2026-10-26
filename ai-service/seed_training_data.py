@@ -21,7 +21,7 @@ import os
 import random
 import sys
 import uuid
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import asyncpg
 
@@ -165,10 +165,10 @@ def calc(qty: float, price: float, disc: float = 0.0, tva: float = 20.0):
     ttc = round(ht + tva_amt, 2)
     return ht, tva_amt, ttc
 
-def ts(d: date) -> str:
+def ts(d: date) -> datetime:
     h = random.randint(8, 17)
     m = random.choice([0, 15, 30, 45])
-    return f"{d.isoformat()}T{h:02d}:{m:02d}:00+00:00"
+    return datetime(d.year, d.month, d.day, h, m, 0, tzinfo=timezone.utc)
 
 def phone() -> str:
     p = random.choice(["0661","0662","0670","0671","0680","0522","0524","0537"])

@@ -46,8 +46,7 @@ CREATE POLICY audit_tenant_read ON audit_log
     FOR SELECT
     USING (
         tenant_id = current_tenant_id()
-        OR current_tenant_id() IS NULL  -- SUPER_ADMIN: no tenant_id → allow all
-           AND current_setting('app.is_super_admin', TRUE) = 'true'
+        OR current_setting('app.is_super_admin', TRUE) = 'true'
     );
 
 CREATE POLICY audit_insert_always ON audit_log

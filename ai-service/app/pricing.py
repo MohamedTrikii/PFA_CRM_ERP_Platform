@@ -5,7 +5,6 @@ No ML training required — suitable until real quote history is accumulated.
 """
 from __future__ import annotations
 from dataclasses import dataclass
-from decimal import Decimal
 
 # Base price per m² (HT, TND) by profile series
 _PROFILE_BASE: dict[str, float] = {

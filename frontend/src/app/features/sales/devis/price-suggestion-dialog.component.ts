@@ -1,8 +1,9 @@
 import {
   Component, inject, signal, ChangeDetectionStrategy,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule }         from '@angular/forms';
-import { NgIf, DecimalPipe }   from '@angular/common';
+import { DecimalPipe }   from '@angular/common';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule }  from '@angular/material/form-field';
 import { MatInputModule }      from '@angular/material/input';
@@ -17,13 +18,14 @@ import {
   SuggestPriceRequest,
   SuggestPriceResponse,
 } from '../../../core/services/ai.service';
+import { ReferenceService } from '../../../core/services/reference.service';
 
 @Component({
   selector: 'erp-price-suggestion-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FormsModule, NgIf, DecimalPipe,
+    FormsModule, DecimalPipe,
     MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatDividerModule,
   ],
@@ -52,10 +54,9 @@ import {
           <mat-label>Série profilé</mat-label>
           <mat-select [(ngModel)]="req.profile_series">
             <mat-option value="">– Inconnu –</mat-option>
-            <mat-option value="T45">T45</mat-option>
-            <mat-option value="T60">T60</mat-option>
-            <mat-option value="T70">T70</mat-option>
-            <mat-option value="T80">T80</mat-option>
+            @for (v of profileSeries(); track v.id) {
+              <mat-option [value]="v.code">{{ v.label }}</mat-option>
+            }
           </mat-select>
         </mat-form-field>
 
@@ -63,11 +64,9 @@ import {
           <mat-label>Type de vitrage</mat-label>
           <mat-select [(ngModel)]="req.glass_type">
             <mat-option value="">– Inconnu –</mat-option>
-            <mat-option value="SIMPLE_4">Simple 4mm</mat-option>
-            <mat-option value="DV_4_16_4">DV 4/16/4</mat-option>
-            <mat-option value="DV_SECURITE">DV Sécurité</mat-option>
-            <mat-option value="FEUILLETE">Feuilleté</mat-option>
-            <mat-option value="ARGON">Argon</mat-option>
+            @for (v of glassTypes(); track v.id) {
+              <mat-option [value]="v.code">{{ v.label }}</mat-option>
+            }
           </mat-select>
         </mat-form-field>
 
@@ -75,11 +74,9 @@ import {
           <mat-label>Ouvrant</mat-label>
           <mat-select [(ngModel)]="req.opening_type">
             <mat-option value="">– Inconnu –</mat-option>
-            <mat-option value="FIXE">Fixe</mat-option>
-            <mat-option value="BATTANT">Battant</mat-option>
-            <mat-option value="COULISSANT">Coulissant</mat-option>
-            <mat-option value="OSCILLO_BATTANT">Oscillo-battant</mat-option>
-            <mat-option value="PIVOTANT">Pivotant</mat-option>
+            @for (v of openingTypes(); track v.id) {
+              <mat-option [value]="v.code">{{ v.label }}</mat-option>
+            }
           </mat-select>
         </mat-form-field>
 
@@ -159,6 +156,11 @@ import {
 export class PriceSuggestionDialogComponent {
   private readonly ai     = inject(AiService);
   private readonly dialog = inject(MatDialogRef<PriceSuggestionDialogComponent>);
+  private readonly refSvc = inject(ReferenceService);
+
+  readonly profileSeries = toSignal(this.refSvc.getValues('GAMME_PROFILE'), { initialValue: [] });
+  readonly glassTypes    = toSignal(this.refSvc.getValues('TYPE_VITRAGE'),   { initialValue: [] });
+  readonly openingTypes  = toSignal(this.refSvc.getValues('TYPE_OUVERTURE'), { initialValue: [] });
 
   req: SuggestPriceRequest = {
     width_mm:  1200,
@@ -201,7 +203,7 @@ export class PriceSuggestionDialogComponent {
 
   confidenceBarClass(c: number): string {
     if (c >= 0.85) return 'bg-green-500';
-    if (c >= 0.70) return 'bg-yellow-400';
+    if (c >= 0.7) return 'bg-yellow-400';
     return 'bg-orange-400';
   }
 }

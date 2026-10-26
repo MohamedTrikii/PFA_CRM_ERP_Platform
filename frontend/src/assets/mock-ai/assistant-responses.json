@@ -1,0 +1,14 @@
+[
+  {
+    "id": "resp-1",
+    "trigger": "prix",
+    "reply": "Pour une fenêtre standard en profil T60, nous recommandons de vérifier la série de vitrage et la quincaillerie avant d'affiner le prix.",
+    "sources": [{"document_id":"doc-alu-1","title":"Fiche produit T60","excerpt":"Profil T60 — usage résidentiel"}]
+  },
+  {
+    "id": "resp-2",
+    "trigger": "stock",
+    "reply": "Le niveau de stock pour le profil T60 est bas : envisagez un réapprovisionnement prioritaire.",
+    "sources": [{"document_id":"doc-stock-1","title":"Rapport stocks","excerpt":"T60: stock critique"}]
+  }
+]

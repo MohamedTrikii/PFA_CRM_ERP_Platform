@@ -7,21 +7,22 @@ import { provideStore } from '@ngrx/store';
 import { provideEffects } from '@ngrx/effects';
 import { provideRouterStore } from '@ngrx/router-store';
 import { provideAuth, OidcSecurityService } from 'angular-auth-oidc-client';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
+import { timeout, catchError } from 'rxjs/operators';
 import { environment } from '../environments/environment';
 import { routes } from './app.routes';
 
 function initAuth(oidc: OidcSecurityService): () => Promise<unknown> {
   return () =>
-    firstValueFrom(oidc.checkAuth()).catch(() => {
-      // Code exchange failed (stale/replayed code) — clear OIDC state and reload clean
-      oidc.logoffLocal();
-      const clean = globalThis.location.origin + '/';
-      if (globalThis.location.href !== clean) {
-        globalThis.location.replace(clean);
-      }
-      return null;
-    });
+    firstValueFrom(
+      oidc.checkAuth().pipe(
+        timeout(8000),
+        catchError(() => {
+          oidc.logoffLocal();
+          return of(null);
+        }),
+      ),
+    );
 }
 
 export const appConfig: ApplicationConfig = {
@@ -44,7 +45,8 @@ export const appConfig: ApplicationConfig = {
         useRefreshToken: true,
         renewTimeBeforeTokenExpiresInSeconds: 30,
         ignoreNonceAfterRefresh: true,
-        unauthorizedRoute: '/',
+        unauthorizedRoute: '/accueil',
+        postLoginRoute: '/dashboard',
       },
     }),
     {

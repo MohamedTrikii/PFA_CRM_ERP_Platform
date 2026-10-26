@@ -213,6 +213,81 @@
           "00000000-0000-0000-0000-000000000002"
         ]
       }
+    },
+    {
+      "username": "employer@atlas.erp.local",
+      "firstName": "Atlas",
+      "lastName": "Employer",
+      "email": "employer@atlas.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "AtlasEmployer@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "EMPLOYER",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000003"
+        ]
+      }
+    },
+    {
+      "username": "employee@atlas.erp.local",
+      "firstName": "Atlas",
+      "lastName": "Employee",
+      "email": "employee@atlas.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "AtlasEmployee@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "EMPLOYEE",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000003"
+        ]
+      }
+    },
+    {
+      "username": "client@atlas.erp.local",
+      "firstName": "Atlas",
+      "lastName": "Client",
+      "email": "client@atlas.erp.local",
+      "enabled": true,
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "AtlasClient@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CLIENT",
+        "offline_access"
+      ],
+      "attributes": {
+        "tenant_id": [
+          "00000000-0000-0000-0000-000000000003"
+        ]
+      }
     }
   ]
 }

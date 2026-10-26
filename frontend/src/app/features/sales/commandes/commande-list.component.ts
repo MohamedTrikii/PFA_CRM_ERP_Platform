@@ -1,9 +1,11 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule }          from '@angular/common';
 import { MatTableModule }        from '@angular/material/table';
+import { MatButtonModule }       from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule }         from '@angular/material/icon';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SalesService, CommandeResponse } from '../../../core/services/sales.service';
 
 type BadgeClass = 'chip-gray' | 'chip-blue' | 'chip-green' | 'chip-red' | 'chip-orange' | 'chip-violet';
@@ -19,7 +21,10 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
 @Component({
   selector: 'erp-commande-list',
   standalone: true,
-  imports: [CommonModule, MatTableModule, MatProgressSpinnerModule, MatPaginatorModule, MatIconModule],
+  imports: [
+    CommonModule, MatTableModule, MatButtonModule,
+    MatProgressSpinnerModule, MatPaginatorModule, MatIconModule, MatSnackBarModule,
+  ],
   template: `
     <div class="erp-page">
       <div class="erp-page-header">
@@ -70,6 +75,18 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
               </td>
             </ng-container>
 
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let c">
+                <button mat-mini-button color="primary"
+                        *ngIf="c.status === 'EN_ATTENTE'"
+                        [disabled]="actionId === c.id"
+                        (click)="confirm(c.id)">
+                  <mat-icon>check_circle</mat-icon> Confirmer
+                </button>
+              </td>
+            </ng-container>
+
             <tr mat-header-row *matHeaderRowDef="columns"></tr>
             <tr mat-row *matRowDef="let c; columns: columns"></tr>
           </table>
@@ -90,12 +107,14 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
 })
 export class CommandeListComponent implements OnInit {
   private readonly salesSvc = inject(SalesService);
+  private readonly snack    = inject(MatSnackBar);
 
   commandes: CommandeResponse[] = [];
   loading  = true;
   total    = 0;
   pageSize = 20;
-  columns  = ['reference', 'status', 'devisId', 'expectedDeliveryDate', 'createdAt'];
+  actionId: string | null = null;
+  columns  = ['reference', 'status', 'devisId', 'expectedDeliveryDate', 'createdAt', 'actions'];
 
   ngOnInit() { this.load(0); }
 
@@ -104,6 +123,21 @@ export class CommandeListComponent implements OnInit {
     this.salesSvc.getCommandes(page, this.pageSize).subscribe({
       next: p => { this.commandes = p.content; this.total = p.totalElements; this.loading = false; },
       error: () => { this.loading = false; },
+    });
+  }
+
+  confirm(id: string) {
+    this.actionId = id;
+    this.salesSvc.transitionCommande(id, 'CONFIRMEE').subscribe({
+      next: () => {
+        this.actionId = null;
+        this.snack.open('Commande confirmée — facture créée automatiquement', 'OK', { duration: 3500 });
+        this.load(0);
+      },
+      error: () => {
+        this.actionId = null;
+        this.snack.open('Impossible de confirmer la commande', 'Fermer', { duration: 4000 });
+      },
     });
   }
 

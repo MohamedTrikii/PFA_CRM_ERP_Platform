@@ -13,8 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SalesService, ProductResponse } from '../../../core/services/sales.service';
 import { AuthContextService } from '../../../core/services/auth-context.service';
-
-const UNITS = ['ml', 'm²', 'm', 'unité', 'kg', 'pièce', 'lot', 'heure', 'paquet'];
+import { ReferenceService, RefValue } from '../../../core/services/reference.service';
 
 @Component({
   selector: 'app-product-catalog',
@@ -96,8 +95,8 @@ const UNITS = ['ml', 'm²', 'm', 'unité', 'kg', 'pièce', 'lot', 'heure', 'paqu
               <mat-form-field appearance="outline">
                 <mat-label>Unité</mat-label>
                 <mat-select formControlName="unit">
-                  @for (u of units; track u) {
-                    <mat-option [value]="u">{{ u }}</mat-option>
+                  @for (v of units; track v.id) {
+                    <mat-option [value]="v.code">{{ v.label }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
@@ -156,8 +155,8 @@ const UNITS = ['ml', 'm²', 'm', 'unité', 'kg', 'pièce', 'lot', 'heure', 'paqu
               <mat-form-field appearance="outline">
                 <mat-label>Unité</mat-label>
                 <mat-select formControlName="unit">
-                  @for (u of units; track u) {
-                    <mat-option [value]="u">{{ u }}</mat-option>
+                  @for (v of units; track v.id) {
+                    <mat-option [value]="v.code">{{ v.label }}</mat-option>
                   }
                 </mat-select>
               </mat-form-field>
@@ -297,9 +296,10 @@ export class ProductCatalogComponent implements OnInit {
   private readonly salesSvc = inject(SalesService);
   private readonly fb       = inject(FormBuilder);
   private readonly snack    = inject(MatSnackBar);
+  private readonly refSvc   = inject(ReferenceService);
   readonly authCtx          = inject(AuthContextService);
 
-  readonly units = UNITS;
+  units: RefValue[] = [];
 
   products: ProductResponse[] = [];
   loading  = true;
@@ -316,7 +316,7 @@ export class ProductCatalogComponent implements OnInit {
     reference:   ['', Validators.required],
     name:        ['', Validators.required],
     description: [''],
-    unit:        ['unité'],
+    unit:        ['UNITE'],
     unitPrice:   [0, [Validators.required, Validators.min(0.01)]],
     tvaRate:     [20, Validators.required],
   });
@@ -331,6 +331,7 @@ export class ProductCatalogComponent implements OnInit {
 
   ngOnInit() {
     this.load(0);
+    this.refSvc.getValues('UNITE_MESURE').subscribe(vals => this.units = vals);
     if (this.authCtx.isSuperAdmin()) {
       this.createForm.get('tenantId')!.addValidators(Validators.required);
       this.createForm.get('tenantId')!.updateValueAndValidity();
@@ -348,7 +349,7 @@ export class ProductCatalogComponent implements OnInit {
   toggleCreate() {
     this.showCreate = !this.showCreate;
     this.editingProduct = null;
-    if (!this.showCreate) this.createForm.reset({ tenantId: null, tvaRate: 20, unit: 'unité', unitPrice: 0 });
+    if (!this.showCreate) this.createForm.reset({ tenantId: null, tvaRate: 20, unit: 'UNITE', unitPrice: 0 });
   }
 
   onCreate() {
@@ -358,7 +359,7 @@ export class ProductCatalogComponent implements OnInit {
       next: () => {
         this.saving = false;
         this.showCreate = false;
-        this.createForm.reset({ tvaRate: 20, unit: 'unité', unitPrice: 0 });
+        this.createForm.reset({ tvaRate: 20, unit: 'UNITE', unitPrice: 0 });
         this.snack.open('Produit créé avec succès', 'OK', { duration: 3000 });
         this.load(0);
       },

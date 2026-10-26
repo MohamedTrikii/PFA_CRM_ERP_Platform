@@ -1,16 +1,24 @@
 import { inject } from '@angular/core';
-import { CanActivateFn } from '@angular/router';
+import { CanActivateFn, Router } from '@angular/router';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
-import { map, take } from 'rxjs/operators';
+import { map, take, timeout, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 export const authGuard: CanActivateFn = () => {
-  const oidc = inject(OidcSecurityService);
+  const oidc   = inject(OidcSecurityService);
+  const router = inject(Router);
 
   return oidc.isAuthenticated$.pipe(
     take(1),
+    timeout(3000),
+    catchError(() => of({ isAuthenticated: false })),
     map(({ isAuthenticated }) => {
       if (isAuthenticated) return true;
-      oidc.authorize();
+      try {
+        oidc.authorize();
+      } catch {
+        return router.createUrlTree(['/accueil']);
+      }
       return false;
     }),
   );

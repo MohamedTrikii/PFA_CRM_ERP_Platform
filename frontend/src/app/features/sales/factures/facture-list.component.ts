@@ -1,12 +1,18 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule }          from '@angular/common';
+import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { MatTableModule }        from '@angular/material/table';
 import { MatButtonModule }       from '@angular/material/button';
 import { MatIconModule }         from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatTooltipModule }      from '@angular/material/tooltip';
+import { MatFormFieldModule }    from '@angular/material/form-field';
+import { MatInputModule }        from '@angular/material/input';
+import { MatSelectModule }       from '@angular/material/select';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SalesService, FactureSummary } from '../../../core/services/sales.service';
+import { ReferenceService, RefValue } from '../../../core/services/reference.service';
 
 type BadgeClass = 'chip-gray' | 'chip-blue' | 'chip-green' | 'chip-red' | 'chip-orange' | 'chip-violet';
 
@@ -23,9 +29,15 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
   selector: 'erp-facture-list',
   standalone: true,
   imports: [
-    CommonModule, MatTableModule, MatButtonModule,
-    MatIconModule, MatProgressSpinnerModule, MatPaginatorModule, MatTooltipModule,
+    CommonModule, ReactiveFormsModule,
+    MatTableModule, MatButtonModule, MatIconModule,
+    MatProgressSpinnerModule, MatPaginatorModule, MatTooltipModule,
+    MatFormFieldModule, MatInputModule, MatSelectModule, MatSnackBarModule,
   ],
+  styles: [`
+    .encaisser-row { display:flex; gap:.5rem; align-items:center; }
+    .encaisser-row mat-form-field { width: 120px; }
+  `],
   template: `
     <div class="erp-page">
       <div class="erp-page-header">
@@ -97,6 +109,42 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
               </td>
             </ng-container>
 
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>Actions</th>
+              <td mat-cell *matCellDef="let f">
+                @if (f.status !== 'PAYEE' && f.status !== 'ANNULEE') {
+                  @if (encaisserId === f.id) {
+                    <div class="encaisser-row" [formGroup]="encaisserForm">
+                      <mat-form-field appearance="outline">
+                        <mat-label>Montant</mat-label>
+                        <input matInput type="number" formControlName="amount" min="0.01" step="0.01">
+                      </mat-form-field>
+                      <mat-form-field appearance="outline">
+                        <mat-label>Mode</mat-label>
+                        <mat-select formControlName="paymentMethod">
+                          @for (v of paymentMethods; track v.id) {
+                            <mat-option [value]="v.code">{{ v.label }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      <button mat-icon-button color="primary"
+                              [disabled]="encaisserForm.invalid || saving"
+                              (click)="submitEncaisser(f.id, f.totalTtc - f.amountPaid)">
+                        <mat-icon>check</mat-icon>
+                      </button>
+                      <button mat-icon-button (click)="encaisserId = null">
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    </div>
+                  } @else {
+                    <button mat-mini-button color="accent" (click)="openEncaisser(f.id)">
+                      <mat-icon>payments</mat-icon> Encaisser
+                    </button>
+                  }
+                }
+              </td>
+            </ng-container>
+
             <tr mat-header-row *matHeaderRowDef="columns"></tr>
             <tr mat-row *matRowDef="let f; columns: columns"
                 [style.background]="isOverdue(f) ? '#fff5f5' : null"></tr>
@@ -118,20 +166,61 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
 })
 export class FactureListComponent implements OnInit {
   private readonly salesSvc = inject(SalesService);
+  private readonly fb       = inject(FormBuilder);
+  private readonly snack    = inject(MatSnackBar);
+  private readonly refSvc   = inject(ReferenceService);
 
-  factures: FactureSummary[] = [];
-  loading  = true;
-  total    = 0;
-  pageSize = 20;
-  columns  = ['reference', 'status', 'dueDate', 'totalTtc', 'amountPaid', 'remaining', 'createdAt'];
+  factures:       FactureSummary[] = [];
+  paymentMethods: RefValue[]       = [];
+  loading     = true;
+  saving      = false;
+  total       = 0;
+  pageSize    = 20;
+  encaisserId: string | null = null;
+  columns     = ['reference', 'status', 'dueDate', 'totalTtc', 'amountPaid', 'remaining', 'createdAt', 'actions'];
 
-  ngOnInit() { this.load(0); }
+  encaisserForm = this.fb.group({
+    amount:        [null as number | null, [Validators.required, Validators.min(0.01)]],
+    paymentMethod: ['VIREMENT', Validators.required],
+  });
+
+  ngOnInit() {
+    this.load(0);
+    this.refSvc.getValues('TYPE_PAIEMENT').subscribe(vals => this.paymentMethods = vals);
+  }
 
   load(page: number) {
     this.loading = true;
     this.salesSvc.getFactures(page, this.pageSize).subscribe({
       next: p => { this.factures = p.content; this.total = p.totalElements; this.loading = false; },
       error: () => { this.loading = false; },
+    });
+  }
+
+  openEncaisser(id: string) {
+    this.encaisserId = id;
+    this.encaisserForm.reset({ amount: null, paymentMethod: 'VIREMENT' });
+  }
+
+  submitEncaisser(id: string, maxAmount: number) {
+    if (this.encaisserForm.invalid) return;
+    const { amount, paymentMethod } = this.encaisserForm.value;
+    if ((amount ?? 0) > maxAmount) {
+      this.snack.open('Montant supérieur au solde restant', 'Fermer', { duration: 3000 });
+      return;
+    }
+    this.saving = true;
+    this.salesSvc.encaisserFacture(id, amount!, paymentMethod!).subscribe({
+      next: () => {
+        this.saving = false;
+        this.encaisserId = null;
+        this.snack.open('Paiement enregistré', 'OK', { duration: 3000 });
+        this.load(0);
+      },
+      error: () => {
+        this.saving = false;
+        this.snack.open('Erreur lors de l\'encaissement', 'Fermer', { duration: 4000 });
+      },
     });
   }
 

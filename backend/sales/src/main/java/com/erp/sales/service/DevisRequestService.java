@@ -2,7 +2,6 @@ package com.erp.sales.service;
 
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
-import com.erp.common.tenant.TenantContext;
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.*;
 import com.erp.sales.repository.*;
@@ -53,11 +52,12 @@ public class DevisRequestService {
         req.setDescription(dto.description());
         req.setStatus(DevisRequestStatus.NOUVEAU);
 
+        List<DevisRequestItem> itemList = new java.util.ArrayList<>();
         short pos = 0;
         for (DevisRequestDto.ItemRequest ir : dto.items()) {
-            DevisRequestItem item = buildItem(req, ir, pos++);
-            req.getItems().add(item);
+            itemList.add(buildItem(req, ir, pos++));
         }
+        req.setItems(itemList);
 
         return toResponse(requestRepo.save(req));
     }
@@ -148,6 +148,6 @@ public class DevisRequestService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

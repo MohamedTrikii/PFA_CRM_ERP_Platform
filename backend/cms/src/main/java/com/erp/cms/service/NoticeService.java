@@ -5,7 +5,7 @@ import com.erp.cms.dto.CmsDto;
 import com.erp.cms.mapper.CmsMapper;
 import com.erp.cms.repository.TenantNoticeRepository;
 import com.erp.common.exception.ResourceNotFoundException;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,17 +13,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class NoticeService {
 
     private final TenantNoticeRepository repo;
     private final CmsMapper              mapper;
     private final com.erp.cms.factory.NoticeFactory noticeFactory;
 
-    private static UUID tid() { return UUID.fromString(TenantContext.requireTenant()); }
+    private static UUID tid() { return TenantUtils.safeTenantUuid(); }
 
     public List<CmsDto.NoticeResponse> listAll() {
         return mapper.toNoticeResponseList(repo.findAllByTenant(tid()));
@@ -39,14 +41,14 @@ public class NoticeService {
         n.setSeverity(req.severity() != null ? req.severity() : com.erp.cms.domain.NoticeSeverity.INFO);
         n.setStartsAt(req.startsAt());
         n.setEndsAt(req.endsAt());
-        return mapper.toNoticeResponse(repo.save(n));
+        return mapper.toNoticeResponse(Objects.requireNonNull(repo.save(n)));
     }
 
     @Transactional
     public CmsDto.NoticeResponse update(UUID id, CmsDto.NoticeUpdateRequest req) {
         TenantNotice n = find(id);
         mapper.updateNotice(req, n);
-        return mapper.toNoticeResponse(repo.save(n));
+        return mapper.toNoticeResponse(Objects.requireNonNull(repo.save(n)));
     }
 
     @Transactional

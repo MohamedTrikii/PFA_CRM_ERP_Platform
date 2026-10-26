@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { NgIf, NgFor, DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { MatTabsModule }            from '@angular/material/tabs';
+import { lastValueFrom }            from 'rxjs';
 import { MatTableModule }           from '@angular/material/table';
 import { MatButtonModule }          from '@angular/material/button';
 import { MatIconModule }            from '@angular/material/icon';
@@ -30,17 +31,17 @@ const FACTURE_BADGE: Record<string, BadgeClass> = {
 };
 
 const REQUEST_BADGE: Record<string, BadgeClass> = {
-  EN_ATTENTE:  'chip-orange',
-  EN_ETUDE:    'chip-blue',
-  DEVIS_CREE:  'chip-green',
-  REFUSE:      'chip-red',
+  NOUVEAU:    'chip-orange',
+  EN_ETUDE:   'chip-blue',
+  DEVIS_CREE: 'chip-green',
+  REFUSE:     'chip-red',
 };
 
 @Component({
   selector: 'app-customer-portal',
   standalone: true,
   imports: [
-    NgIf, NgFor, DatePipe, DecimalPipe,
+    DatePipe, DecimalPipe,
     MatTabsModule, MatTableModule,
     MatButtonModule, MatIconModule,
     MatProgressSpinnerModule, MatTooltipModule,
@@ -100,6 +101,12 @@ const REQUEST_BADGE: Record<string, BadgeClass> = {
           account_circle
         </mat-icon>
         <h1>Mon espace client</h1>
+        <button mat-raised-button color="primary"
+                routerLink="/portal/quote-request"
+                style="margin-left:auto">
+          <mat-icon>add</mat-icon>
+          Nouvelle demande de devis
+        </button>
       </div>
 
       <mat-tab-group animationDuration="200ms" color="primary">
@@ -293,9 +300,9 @@ export class CustomerPortalComponent implements OnInit {
 
   ngOnInit() {
     Promise.all([
-      this.portalSvc.myDevis().toPromise(),
-      this.portalSvc.myFactures().toPromise(),
-      this.portalSvc.myRequests().toPromise(),
+      lastValueFrom(this.portalSvc.myDevis()),
+      lastValueFrom(this.portalSvc.myFactures()),
+      lastValueFrom(this.portalSvc.myRequests()),
     ]).then(([d, f, r]) => {
       this.devis    = d ?? [];
       this.factures = f ?? [];

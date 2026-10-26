@@ -3,7 +3,7 @@ package com.erp.sales.service;
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
 import com.erp.common.event.LivraisonConfirmedEvent;
-import com.erp.common.tenant.TenantContext;
+// removed unused TenantContext import
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.LivraisonDto;
 import com.erp.sales.mapper.SalesMapper;
@@ -118,6 +118,6 @@ public class LivraisonService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

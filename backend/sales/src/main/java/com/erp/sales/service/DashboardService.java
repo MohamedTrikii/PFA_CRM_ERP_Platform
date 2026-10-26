@@ -1,6 +1,5 @@
 package com.erp.sales.service;
 
-import com.erp.common.tenant.TenantContext;
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.DashboardDto;
 import com.erp.sales.repository.*;
@@ -26,7 +25,7 @@ public class DashboardService {
     private final DevisRequestRepository   requestRepo;
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 
     public DashboardDto.EmployerSummary employerSummary() {

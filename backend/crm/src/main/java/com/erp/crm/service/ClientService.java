@@ -2,7 +2,7 @@ package com.erp.crm.service;
 
 import com.erp.common.audit.AuditAction;
 import com.erp.common.audit.Auditable;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import com.erp.crm.domain.Client;
 import com.erp.crm.dto.ClientDto;
 import com.erp.crm.mapper.CrmMapper;
@@ -15,10 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class ClientService {
 
     private final ClientRepository repo;
@@ -37,7 +39,7 @@ public class ClientService {
     public ClientDto.Response create(ClientDto.CreateRequest req) {
         Client c = mapper.toEntity(req);
         c.setTenantId(tenantId());
-        return mapper.toResponse(repo.save(c));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(c)));
     }
 
     @Transactional
@@ -45,7 +47,7 @@ public class ClientService {
     public ClientDto.Response update(UUID id, ClientDto.UpdateRequest req) {
         Client c = get(id);
         mapper.updateEntity(req, c);
-        return mapper.toResponse(repo.save(c));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(c)));
     }
 
     private Client get(UUID id) {
@@ -53,5 +55,5 @@ public class ClientService {
             .orElseThrow(() -> new EntityNotFoundException("Client not found: " + id));
     }
 
-    private UUID tenantId() { return UUID.fromString(TenantContext.requireTenant()); }
+    private UUID tenantId() { return TenantUtils.safeTenantUuid(); }
 }

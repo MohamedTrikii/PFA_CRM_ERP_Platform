@@ -2,7 +2,7 @@ package com.erp.identity.service;
 
 import com.erp.common.audit.AuditAction;
 import com.erp.common.audit.Auditable;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import com.erp.identity.domain.User;
 import com.erp.identity.dto.UserDto;
 import com.erp.identity.mapper.UserMapper;
@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.util.Objects;
 import com.erp.identity.observer.UserLifecyclePublisher;
 
 @Service
@@ -33,17 +34,18 @@ public class UserService {
     private final UserLifecyclePublisher userLifecyclePublisher;
 
     public Page<UserDto.Response> findAll(Pageable pageable) {
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        UUID tenantId = TenantUtils.safeTenantUuid();
         return userRepository.findAllByTenantId(tenantId, pageable)
                              .map(userMapper::toResponse);
     }
 
     public UserDto.Response findById(UUID id) {
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        UUID tenantId = TenantUtils.safeTenantUuid();
         return userMapper.toResponse(getOrThrow(id, tenantId));
     }
 
     /** Called on first login — upserts the user record from Keycloak JWT claims. */
+    @SuppressWarnings("null")
     @Transactional
     @Auditable(action = AuditAction.LOGIN, entityType = "User")
     public UserDto.Response upsertFromToken(String keycloakId, String email,
@@ -53,7 +55,7 @@ public class UserService {
             .map(existing -> {
                 existing.setEmail(email);
                 existing.setDisplayName(displayName);
-                return userMapper.toResponse(userRepository.save(existing));
+                return userMapper.toResponse(Objects.requireNonNull(userRepository.save(existing)));
             })
             .orElseGet(() -> {
                 User user = User.builder()
@@ -63,14 +65,14 @@ public class UserService {
                     .role(role)
                     .build();
                 user.setTenantId(tenantId);
-                return userMapper.toResponse(userRepository.save(user));
+                return userMapper.toResponse(Objects.requireNonNull(userRepository.save(user)));
             });
     }
 
     @Transactional
     @Auditable(action = AuditAction.CREATE, entityType = "User")
     public UserDto.Response create(UserDto.CreateRequest request) {
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        UUID tenantId = TenantUtils.safeTenantUuid();
         if (userRepository.existsByEmailAndTenantId(request.email(), tenantId)) {
             throw new IllegalArgumentException("Email already exists in this tenant");
         }
@@ -83,19 +85,21 @@ public class UserService {
         return userMapper.toResponse(saved);
     }
 
+    @SuppressWarnings("null")
     @Transactional
     @Auditable(action = AuditAction.UPDATE, entityType = "User")
     public UserDto.Response update(UUID id, UserDto.UpdateRequest request) {
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        UUID tenantId = TenantUtils.safeTenantUuid();
         User user = getOrThrow(id, tenantId);
         userMapper.updateEntity(request, user);
-        return userMapper.toResponse(userRepository.save(user));
+        User saved = Objects.requireNonNull(userRepository.save(user));
+        return userMapper.toResponse(saved);
     }
 
     @Transactional
     @Auditable(action = AuditAction.DELETE, entityType = "User")
     public void deactivate(UUID id) {
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        UUID tenantId = TenantUtils.safeTenantUuid();
         User user = getOrThrow(id, tenantId);
         user.setActive(false);
         User saved = userRepository.save(user);

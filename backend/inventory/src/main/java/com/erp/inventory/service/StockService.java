@@ -22,9 +22,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.Objects;
 import com.erp.inventory.observer.StockLevelPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +41,7 @@ public class StockService {
     private final InventoryMapper mapper;
     private final JdbcTemplate jdbc;
     private final StockLevelPublisher stockLevelPublisher;
+    private final ApplicationContext ctx;
 
     // ── Locations ─────────────────────────────────────────────────────────────
 
@@ -47,11 +50,13 @@ public class StockService {
                 .stream().map(mapper::toLocationResponse).toList();
     }
 
+    @SuppressWarnings("null")
     @Transactional
     @Auditable(action = AuditAction.CREATE, entityType = "StockLocation")
     public StockDto.LocationResponse createLocation(StockDto.LocationCreate dto) {
         StockLocation loc = mapper.toLocation(dto);
-        return mapper.toLocationResponse(locationRepo.save(loc));
+        StockLocation saved = Objects.requireNonNull(locationRepo.save(loc));
+        return mapper.toLocationResponse(saved);
     }
 
     // ── Stock items ───────────────────────────────────────────────────────────
@@ -85,67 +90,60 @@ public class StockService {
      * Records a stock movement and updates the StockItem ledger balance.
      * Called both by manual adjustments and the RabbitMQ event handler.
      */
+    @SuppressWarnings("null")
     @Transactional
     @Auditable(action = AuditAction.CREATE, entityType = "StockMovement")
-    public StockDto.MovementResponse recordMovement(UUID productId,
-                                                    String productReference,
-                                                    UUID locationId,
-                                                    MovementType type,
-                                                    BigDecimal quantity,
-                                                    String referenceType,
-                                                    UUID referenceId,
-                                                    String notes) {
+    public StockDto.MovementResponse recordMovement(StockDto.MovementCreate req) {
         UUID tid = tid();
 
         StockMovement movement = new StockMovement();
-        movement.setProductId(productId);
-        movement.setProductReference(productReference);
-        movement.setLocationId(locationId);
-        movement.setMovementType(type);
-        movement.setQuantity(quantity);
-        movement.setReferenceType(referenceType);
-        movement.setReferenceId(referenceId);
-        movement.setNotes(notes);
+        movement.setProductId(req.productId());
+        movement.setProductReference(req.productReference());
+        movement.setLocationId(req.locationId());
+        movement.setMovementType(req.movementType());
+        movement.setQuantity(req.quantity());
+        movement.setReferenceType(req.referenceType());
+        movement.setReferenceId(req.referenceId());
+        movement.setNotes(req.notes());
         movement.setOccurredAt(Instant.now());
 
         movementRepo.save(movement);
 
         // Update StockItem balance
         StockItem item = itemRepo
-                .findByTenantProductAndLocation(tid, productId, locationId)
+                .findByTenantProductAndLocation(tid, req.productId(), req.locationId())
                 .orElseGet(() -> {
                     StockItem newItem = new StockItem();
-                    newItem.setProductId(productId);
-                    newItem.setProductReference(productReference);
-                    newItem.setLocationId(locationId);
+                    newItem.setProductId(req.productId());
+                    newItem.setProductReference(req.productReference());
+                    newItem.setLocationId(req.locationId());
                     return newItem;
                 });
-
-        if (type == MovementType.ENTREE || type == MovementType.AJUSTEMENT) {
-            item.setQuantity(item.getQuantity().add(quantity));
-        } else if (type == MovementType.SORTIE) {
-            BigDecimal newQty = item.getQuantity().subtract(quantity);
+        if (req.movementType() == MovementType.ENTREE || req.movementType() == MovementType.AJUSTEMENT) {
+            item.setQuantity(item.getQuantity().add(req.quantity()));
+        } else if (req.movementType() == MovementType.SORTIE) {
+            BigDecimal newQty = item.getQuantity().subtract(req.quantity());
             if (newQty.compareTo(BigDecimal.ZERO) < 0) {
                 newQty = BigDecimal.ZERO;
             }
             item.setQuantity(newQty);
         }
 
-        itemRepo.save(item);
+        StockItem savedItem = Objects.requireNonNull(itemRepo.save(item));
         // publish stock level change
         try {
-            stockLevelPublisher.publish(productId, item.getQuantity().intValue());
-        } catch (Exception e) { log.warn("Failed to publish stock level for {}", productId, e); }
+            stockLevelPublisher.publish(req.productId(), savedItem.getQuantity().intValue());
+        } catch (Exception e) { log.warn("Failed to publish stock level for {}", req.productId(), e); }
         return mapper.toMovementResponse(movement);
     }
 
     @Transactional
     public StockDto.MovementResponse adjust(StockDto.AdjustRequest dto) {
         String ref = lookupProductReference(dto.productId());
-        return recordMovement(
-                dto.productId(), ref, dto.locationId(),
-                dto.movementType(), dto.quantity(),
-                "MANUAL", null, dto.notes());
+        StockDto.MovementCreate req = new StockDto.MovementCreate(
+            dto.productId(), ref, dto.locationId(), dto.movementType(), dto.quantity(),
+            "MANUAL", null, dto.notes());
+        return ctx.getBean(StockService.class).recordMovement(req);
     }
 
     private String lookupProductReference(UUID productId) {
@@ -158,7 +156,12 @@ public class StockService {
         }
     }
 
+    private static final UUID SYSTEM_TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        String tenantId = TenantContext.get();
+        return (tenantId == null || tenantId.isBlank())
+                ? SYSTEM_TENANT
+                : UUID.fromString(tenantId);
     }
 }

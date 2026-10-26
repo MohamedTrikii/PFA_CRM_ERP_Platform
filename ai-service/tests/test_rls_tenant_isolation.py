@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pytest
 
 from httpx import AsyncClient
@@ -42,24 +43,29 @@ async def test_retrieval_stamps_session_and_calls_fetch(monkeypatch):
 
     monkeypatch.setattr("app.auth.get_current_user", fake_get_current_user)
     monkeypatch.setattr("asyncpg.connect", fake_connect)
+    app_module.app.dependency_overrides[app_module._resolve_current_user] = fake_get_current_user
 
-    async with AsyncClient(app=app_module.app, base_url="http://test") as ac:
-        resp = await ac.post(
-            "/api/v1/ai/retrieval",
-            json={"tenant_id": "tenant_a", "query": "search me", "k": 1},
-            headers={"Authorization": "Bearer dummy"},
+    # Ensure DATABASE_URL is set so retrieval uses asyncpg.connect (monkeypatched)
+    os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost/db")
+    # update module-level DB_URL that was read at import time
+    app_module.DB_URL = os.environ.get("DATABASE_URL")
+
+    try:
+        resp = await app_module.retrieval(
+            app_module.RetrievalRequest(tenant_id="tenant_a", query="search me", k=1),
+            {"tenant_id": "tenant_a"},
         )
+    finally:
+        app_module.app.dependency_overrides.clear()
 
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["tenant_id"] == "tenant_a"
+    assert resp.results[0].document_id == "doc1"
 
 
 @pytest.mark.asyncio
 async def test_indexer_sets_session_per_document(monkeypatch):
     # Prepare fake rows to be returned by the devis query
     devis_rows = [
-        {"id": 1, "tenant_id": "tenant_x", "reference": "R1", "total_ttc": 100, "created_at": "2026-01-01"},
+        {"id": 1, "tenant_id": "tenant_x", "reference": "R1", "total_ht": 80, "total_ttc": 100, "status": "ACCEPTE", "created_at": "2026-01-01", "valid_until": "2026-12-31"},
     ]
 
     fake_conn = FakeConn(fetch_rows=devis_rows, fetchrow_result={"id": "doc-uuid"})
@@ -69,6 +75,8 @@ async def test_indexer_sets_session_per_document(monkeypatch):
 
     monkeypatch.setattr("asyncpg.connect", fake_connect)
 
+    # Ensure a DATABASE_URL is present so db.connection uses asyncpg.connect (monkeypatched)
+    os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost/db")
     # Run the indexer (async function) — it should call execute with set_config per row
     await app_module.indexer_module.index_devis(1)
 

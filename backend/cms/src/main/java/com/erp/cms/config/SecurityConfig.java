@@ -32,6 +32,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/cms/notices/active").permitAll()
                         // logo is public so the login page can show the tenant logo
                         .requestMatchers("/api/v1/cms/branding/logo").permitAll()
+                        // full branding for the unauthenticated public company site
+                        .requestMatchers("/api/v1/cms/branding/public").permitAll()
+                        // reference values are public so unauthenticated forms (quote-request) can load choices
+                        .requestMatchers("/api/v1/cms/references/values/**").permitAll()
+                        .requestMatchers("/api/v1/cms/references/categories").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtAuthConverter)))

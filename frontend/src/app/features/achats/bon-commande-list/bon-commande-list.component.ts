@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormArray, Validators } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   AchatService, BonCommandeSummary, BonCommandeResponse,
   BonCommandeStatus, FournisseurResponse
@@ -20,7 +21,37 @@ const STATUS_CSS: Record<BonCommandeStatus, string> = {
 @Component({
   selector: 'app-bon-commande-list',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatSnackBarModule],
+  styles: [`
+    .filter-bar {
+      display: flex; flex-wrap: wrap; gap: .5rem;
+      margin-bottom: .75rem;
+    }
+    .chip {
+      padding: .35rem .85rem; border-radius: 20px; font-size: .8rem; font-weight: 600;
+      border: 1.5px solid var(--clr-border, #e2e8f0);
+      background: var(--clr-surface, #fff); color: var(--clr-text-2, #475569);
+      cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .chip:hover { border-color: var(--clr-primary, #2563eb); color: var(--clr-primary, #2563eb); }
+    .chip-active {
+      padding: .35rem .85rem; border-radius: 20px; font-size: .8rem; font-weight: 600;
+      border: 1.5px solid var(--clr-primary, #2563eb);
+      background: var(--clr-primary-light, #eff6ff); color: var(--clr-primary, #2563eb);
+      cursor: pointer;
+    }
+    .table-container { overflow-x: auto; }
+    .ligne-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: flex-start; margin-bottom: .5rem; }
+    .form-row  { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .75rem; margin-bottom: .75rem; }
+    .text-right { text-align: right; }
+    label { display: flex; flex-direction: column; gap: .3rem; font-size: .875rem; font-weight: 500; }
+    input, select, textarea {
+      padding: .45rem .7rem; border: 1.5px solid var(--clr-border, #e2e8f0);
+      border-radius: 6px; font-size: .875rem; font-family: inherit; outline: none;
+      transition: border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--clr-primary, #2563eb); }
+  `],
   template: `
     <div class="page-header">
       <h2>Bons de commande</h2>
@@ -158,7 +189,8 @@ const STATUS_CSS: Record<BonCommandeStatus, string> = {
 export class BonCommandeListComponent implements OnInit {
   private achatService = inject(AchatService);
   private salesService = inject(SalesService);
-  private fb = inject(FormBuilder);
+  private fb           = inject(FormBuilder);
+  private snack        = inject(MatSnackBar);
 
   readonly STATUS_LABELS = STATUS_LABELS;
   readonly STATUS_CSS    = STATUS_CSS;
@@ -258,8 +290,17 @@ export class BonCommandeListComponent implements OnInit {
       })),
     };
     this.achatService.createBonCommande(req).subscribe({
-      next: () => { this.saving = false; this.closeCreate(); this.loadPage(0); },
-      error: () => { this.saving = false; },
+      next: () => {
+        this.saving = false;
+        this.closeCreate();
+        this.snack.open('Bon de commande créé avec succès', 'OK', { duration: 3000 });
+        this.loadPage(0);
+      },
+      error: (err) => {
+        this.saving = false;
+        const msg = err?.error?.message || 'Erreur lors de la création du bon de commande';
+        this.snack.open(msg, 'Fermer', { duration: 4000 });
+      },
     });
   }
 

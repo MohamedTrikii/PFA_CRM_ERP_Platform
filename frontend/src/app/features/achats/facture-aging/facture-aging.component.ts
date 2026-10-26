@@ -11,7 +11,9 @@ import { AchatService, AgingReport, AgingBucket } from '../../../core/services/a
       <h2>Vieillissement des créances</h2>
     </div>
 
-    @if (report) {
+    @if (loadError) {
+      <p class="erp-empty">Impossible de charger le rapport. Veuillez réessayer.</p>
+    } @else if (report) {
       <div class="kpi-row">
         <div class="kpi-card kpi-neutral">
           <span class="kpi-label">Total impayé</span>
@@ -56,19 +58,22 @@ export class FactureAgingComponent implements OnInit {
   private achatService = inject(AchatService);
 
   report: AgingReport | null = null;
-
   buckets: Array<AgingBucket & { cssClass: string }> = [];
+  loadError = false;
 
   ngOnInit() {
-    this.achatService.getAgingSummary().subscribe(r => {
-      this.report = r;
-      this.buckets = [
-        { ...r.current,   cssClass: 'ok'    },
-        { ...r.days1_30,  cssClass: 'warn1' },
-        { ...r.days31_60, cssClass: 'warn2' },
-        { ...r.days61_90, cssClass: 'warn3' },
-        { ...r.over90,    cssClass: 'crit'  },
-      ];
+    this.achatService.getAgingSummary().subscribe({
+      next: r => {
+        this.report = r;
+        this.buckets = [
+          { ...r.current,   cssClass: 'ok'    },
+          { ...r.days1_30,  cssClass: 'warn1' },
+          { ...r.days31_60, cssClass: 'warn2' },
+          { ...r.days61_90, cssClass: 'warn3' },
+          { ...r.over90,    cssClass: 'crit'  },
+        ];
+      },
+      error: () => { this.loadError = true; },
     });
   }
 }

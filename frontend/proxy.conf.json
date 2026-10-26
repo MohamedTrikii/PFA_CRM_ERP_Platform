@@ -1,4 +1,27 @@
 {
+  "/api/v1/ai/assistant/stream": {
+    "target": "http://localhost:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": false
+  },
+  "/api/v1/ai/chat/stream": {
+    "target": "http://localhost:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": false
+  },
+  "/api/ai/chat/stream": {
+    "target": "http://localhost:8000",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": false
+  },
+  "/api/v1/ai": {
+    "target": "http://localhost:8000",
+    "secure": false,
+    "changeOrigin": true
+  },
   "/api": {
     "target": "http://localhost:8443",
     "secure": false,

@@ -6,7 +6,7 @@ import com.erp.achat.mapper.AchatMapper;
 import com.erp.achat.repository.FournisseurRepository;
 import com.erp.common.exception.ConflictException;
 import com.erp.common.exception.ResourceNotFoundException;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,16 +14,18 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class FournisseurService {
 
     private final FournisseurRepository repo;
     private final AchatMapper mapper;
 
-    private static UUID tid() { return UUID.fromString(TenantContext.requireTenant()); }
+    private static UUID tid() { return TenantUtils.safeTenantUuid(); }
 
     public Page<AchatDto.FournisseurResponse> list(Pageable pageable) {
         return repo.findAllByTenant(tid(), pageable).map(mapper::toFournisseurResponse);
@@ -44,7 +46,7 @@ public class FournisseurService {
         }
         Fournisseur f = mapper.toEntity(req);
         f.setTenantId(tid());
-        return mapper.toFournisseurResponse(repo.save(f));
+        return mapper.toFournisseurResponse(Objects.requireNonNull(repo.save(f)));
     }
 
     @Transactional

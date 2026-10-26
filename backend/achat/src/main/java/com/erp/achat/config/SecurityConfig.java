@@ -3,6 +3,7 @@ package com.erp.achat.config;
 import com.erp.common.security.KeycloakJwtAuthConverter;
 import com.erp.common.tenant.TenantResolutionFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -16,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
 public class SecurityConfig {
 
     private final KeycloakJwtAuthConverter keycloakJwtAuthConverter;

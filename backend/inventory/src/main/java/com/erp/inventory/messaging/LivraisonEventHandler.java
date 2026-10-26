@@ -24,15 +24,11 @@ public class LivraisonEventHandler {
         TenantContext.set(event.tenantId().toString());
         try {
             for (LivraisonConfirmedEvent.Line line : event.lines()) {
-                stockService.recordMovement(
-                        line.productId(),
-                        line.productReference(),
-                        null,
-                        MovementType.SORTIE,
-                        line.quantityDelivered(),
-                        "LIVRAISON",
-                        event.livraisonId(),
-                        "Auto from livraison " + event.livraisonId());
+                stockService.recordMovement(new com.erp.inventory.dto.StockDto.MovementCreate(
+                    line.productId(), line.productReference(), null, MovementType.SORTIE,
+                    line.quantityDelivered(), "LIVRAISON", event.livraisonId(),
+                    "Auto from livraison " + event.livraisonId()
+                ));
             }
         } finally {
             TenantContext.clear();

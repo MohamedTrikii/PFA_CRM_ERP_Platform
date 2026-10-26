@@ -51,10 +51,13 @@ const ACTION_BADGE: Partial<Record<AuditAction, BadgeClass>> = {
       </div>
 
       <div class="erp-table-wrap">
-                <div *ngIf="loading()" class="erp-loading" style="display:flex;justify-content:center;padding:1rem">
-                  <mat-spinner diameter="40"></mat-spinner>
-                </div>
-                <table mat-table [dataSource]="entries()" class="w-full">
+        <div *ngIf="error()" class="erp-error" style="margin-bottom:1rem;padding:1rem;border:1px solid var(--clr-danger);border-radius:.75rem;background:rgba(239, 68, 68, .08);color:var(--clr-danger)">
+          {{ error() }}
+        </div>
+        <div *ngIf="loading()" class="erp-loading" style="display:flex;justify-content:center;padding:1rem">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+        <table mat-table [dataSource]="entries()" class="w-full">
 
           <ng-container matColumnDef="id">
             <th mat-header-cell *matHeaderCellDef>#</th>
@@ -155,12 +158,13 @@ export class AuditLogComponent implements OnInit {
   entries       = signal<AuditEntry[]>([]);
   total         = signal(0);
   loading       = signal(false);
+  error         = signal<string | null>(null);
   pageSize      = 50;
   page          = 0;
   selectedAction: AuditAction | null = null;
 
-  private tenantMap = new Map<string, string>();  // tenantId → name (slug)
-  private actorMap  = new Map<string, string>();  // keycloakId → displayName
+  private readonly tenantMap = new Map<string, string>();  // tenantId → name (slug)
+  private readonly actorMap  = new Map<string, string>();  // keycloakId → displayName
 
   ngOnInit() {
     // Build tenant lookup from the already-loaded tenants list
@@ -170,9 +174,14 @@ export class AuditLogComponent implements OnInit {
 
   load() {
     this.loading.set(true);
+    this.error.set(null);
     this.svc.getAuditLog(this.page, this.pageSize, this.selectedAction ?? undefined)
       .pipe(
-        catchError(err => { console.error('Audit load error', err); return of({ content: [], totalElements: 0 }); }),
+        catchError(err => {
+          console.error('Audit load error', err);
+          this.error.set(err.error?.message || err.message || 'Erreur lors du chargement du journal d\'audit');
+          return of({ content: [], totalElements: 0 });
+        }),
         finalize(() => this.loading.set(false))
       )
       .subscribe(p => {

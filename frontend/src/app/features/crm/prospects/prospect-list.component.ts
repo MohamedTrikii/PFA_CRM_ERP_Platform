@@ -12,6 +12,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { RouterModule } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthContextService } from '../../../core/services/auth-context.service';
+import { ReferenceService, RefValue } from '../../../core/services/reference.service';
 
 interface ProspectSummary {
   id: string; name: string; company: string; email: string;
@@ -125,7 +126,12 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
 
             <mat-form-field appearance="outline">
               <mat-label>Source</mat-label>
-              <input matInput formControlName="source" placeholder="Site web, recommandation…">
+              <mat-select formControlName="source">
+                <mat-option value="">— Non renseigné —</mat-option>
+                @for (v of sourcesProspection; track v.id) {
+                  <mat-option [value]="v.code">{{ v.label }}</mat-option>
+                }
+              </mat-select>
             </mat-form-field>
 
             <div class="form-actions">
@@ -200,12 +206,14 @@ const STATUS_BADGE: Record<string, BadgeClass> = {
   `,
 })
 export class ProspectListComponent implements OnInit {
-  private readonly http  = inject(HttpClient);
-  private readonly fb    = inject(FormBuilder);
-  private readonly snack = inject(MatSnackBar);
-  readonly authCtx       = inject(AuthContextService);
+  private readonly http   = inject(HttpClient);
+  private readonly fb     = inject(FormBuilder);
+  private readonly snack  = inject(MatSnackBar);
+  private readonly refSvc = inject(ReferenceService);
+  readonly authCtx        = inject(AuthContextService);
 
-  prospects: ProspectSummary[] = [];
+  prospects:          ProspectSummary[] = [];
+  sourcesProspection: RefValue[]        = [];
   loading    = true;
   saving     = false;
   showCreate = false;
@@ -222,6 +230,7 @@ export class ProspectListComponent implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.refSvc.getValues('SOURCE_PROSPECTION').subscribe(vals => this.sourcesProspection = vals);
     if (this.authCtx.isSuperAdmin()) {
       this.createForm.get('tenantId')!.addValidators(Validators.required);
       this.createForm.get('tenantId')!.updateValueAndValidity();

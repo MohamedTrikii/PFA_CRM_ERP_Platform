@@ -4,11 +4,12 @@ import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { EmployerDashboardComponent }  from './employer-dashboard.component';
 import { EmployeeDashboardComponent }  from './employee-dashboard.component';
 import { ClientDashboardComponent }    from './client-dashboard.component';
+import { AiDashboardComponent }       from '../ai-assistant/ai-dashboard.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, EmployerDashboardComponent, EmployeeDashboardComponent, ClientDashboardComponent],
+  imports: [CommonModule, EmployerDashboardComponent, EmployeeDashboardComponent, ClientDashboardComponent, AiDashboardComponent],
   template: `
     <div class="erp-page">
       <div class="erp-page-header">
@@ -16,8 +17,8 @@ import { ClientDashboardComponent }    from './client-dashboard.component';
       </div>
 
       @switch (role) {
-        @case ('SUPER_ADMIN') { <app-employer-dashboard/> }
-        @case ('EMPLOYER')    { <app-employer-dashboard/> }
+        @case ('SUPER_ADMIN') { <app-employer-dashboard/> <erp-ai-dashboard/> }
+        @case ('EMPLOYER')    { <app-employer-dashboard/> <erp-ai-dashboard/> }
         @case ('EMPLOYEE')    { <app-employee-dashboard/> }
         @case ('CLIENT')      { <app-client-dashboard/>   }
         @default {

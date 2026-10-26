@@ -30,7 +30,7 @@ async def load_latest_model(tenant_id: str, model_name: str) -> tuple[Any, dict[
 
 
 async def predict_sales_forecast(tenant_id: str, horizon_days: int = 90) -> list[dict[str, Any]]:
-    model, model_row = await load_latest_model(tenant_id, "sales_forecast_prophet")
+    model, _ = await load_latest_model(tenant_id, "sales_forecast_prophet")
     future = model.make_future_dataframe(periods=horizon_days, freq="D")
     forecast = model.predict(future)
     points = forecast[["ds", "yhat"]].tail(horizon_days)
@@ -82,7 +82,7 @@ async def predict_payment_risk(tenant_id: str, features: dict[str, Any]) -> dict
 
 
 async def detect_stock_anomalies(tenant_id: str, since_days: int = 30) -> list[dict[str, Any]]:
-    model, model_row = await load_latest_model(tenant_id, "stock_anomaly_iforest")
+    model, _ = await load_latest_model(tenant_id, "stock_anomaly_iforest")
     query = (
         "SELECT id::text as entity_id, quantity::float as quantity, quantity_before::float as quantity_before, "
         "quantity_after::float as quantity_after, movement_type, created_at "

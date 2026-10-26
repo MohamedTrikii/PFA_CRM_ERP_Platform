@@ -1,5 +1,6 @@
 """JWT verification against Keycloak public key."""
 import os
+import time
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
@@ -12,15 +13,18 @@ KEYCLOAK_REALM  = os.getenv("KEYCLOAK_REALM", "erp")
 _JWKS_URI       = f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs"
 
 _jwks_cache: dict | None = None
+_jwks_fetched_at: float = 0.0
+_JWKS_TTL = 3600.0  # re-fetch keys every hour
 
 
 async def _get_jwks() -> dict:
-    global _jwks_cache
-    if _jwks_cache is None:
+    global _jwks_cache, _jwks_fetched_at
+    if _jwks_cache is None or time.monotonic() - _jwks_fetched_at > _JWKS_TTL:
         async with httpx.AsyncClient() as client:
             r = await client.get(_JWKS_URI, timeout=10)
             r.raise_for_status()
             _jwks_cache = r.json()
+            _jwks_fetched_at = time.monotonic()
     return _jwks_cache
 
 

@@ -47,7 +47,7 @@ Notes: the chat endpoints currently call `ai-service/app/ollama.py`. Streaming S
 - `/api/v1/ai/documents/search` — explicit documents search API (pgvector-backed retrieval). Indexer functions exist (`ai-service/app/indexer.py`) but no dedicated REST endpoint for documents/search.
 - Persist full conversation transcripts into `ai_conversations` table: `ai-service/app/conversation.py` contains helpers; ensure `assistant` and `chat` endpoints record messages consistently.
 - `ai-service/app/embedder.py` and `ai-service/app/chat.py` — RAG orchestration and embedding utilities are TODO (see `ai-service/app/indexer.py` and `ai-service/app/ollama.py` for references).
-- Postgres session stamping (`set_config('app.tenant_id', ...)`) for tenant-aware queries is mentioned in TODO.md and not fully wired.
+- Postgres session stamping (`set_config('app.tenant_id', ...)`) for tenant-aware queries is mentioned in docs/notes/TODO.md and not fully wired.
 
 ---
 

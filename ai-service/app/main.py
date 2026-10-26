@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
@@ -6,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Annotated, Optional, List, Any
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
 from uuid import uuid4
 
 import httpx
@@ -17,10 +20,14 @@ from .pricing import suggest_price
 from .forecast import forecast_item
 from . import ollama as ollama_client
 from . import indexer as indexer_module
+from . import embedder as embedder_module
 from . import db
 from . import conversation as conversation_module
-import asyncpg
+from . import context_builder
+from . import fallback as fallback_module
 import types
+
+logger = logging.getLogger(__name__)
 
 TRAINING_FEATURES_AVAILABLE = True
 try:
@@ -28,6 +35,7 @@ try:
 except ImportError:
     TRAINING_FEATURES_AVAILABLE = False
     async def _dummy_async(*args, **kwargs):
+        await asyncio.sleep(0)
         return {}
 
     prophet_trainer = types.SimpleNamespace(train_sales_forecast_model=_dummy_async)
@@ -47,6 +55,20 @@ except ImportError:
 DB_URL = os.getenv("DATABASE_URL")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.init_pool()
+    indexer_module.start_background_indexer(interval_seconds=300)
+    yield
+    await db.close_pool()
+
+
+class ConversationSummary(BaseModel):
+    conversation_id: str
+    created_at: str
+    preview: str
+
+
 class RetrievalRequest(BaseModel):
     tenant_id: Optional[str] = None
     query: str
@@ -55,7 +77,7 @@ class RetrievalRequest(BaseModel):
 
 class RetrievalItem(BaseModel):
     document_id: str
-    title: Optional[str]
+    title: Optional[str] = None
     content: str
     distance: float
 
@@ -66,13 +88,28 @@ class RetrievalResponse(BaseModel):
 
 # Annotated dependency aliases (FastAPI best practice)
 StaffUser = Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN", "EMPLOYER", "EMPLOYEE"))]
-AnyUser = Annotated[dict, Depends(auth.get_current_user)]
+
+# Adapter dependency: call `auth.get_current_user` at request time so tests
+# can monkeypatch `app.auth.get_current_user` and have it take effect.
+async def _resolve_current_user(creds=Depends(auth._bearer)) -> dict:
+    return await auth.get_current_user(creds)
+
+AnyUser = Annotated[dict, Depends(_resolve_current_user)]
+
+# Keep references to background tasks to avoid premature GC
+_background_tasks: list[asyncio.Task] = []
+
+def _schedule(coro: Any) -> asyncio.Task:
+    t = asyncio.create_task(coro)
+    _background_tasks.append(t)
+    return t
 
 app = FastAPI(
     title="ERP AI Service",
     version="1.0.0",
     docs_url="/api/v1/ai/docs",
     openapi_url="/api/v1/ai/openapi.json",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -167,7 +204,7 @@ class ChatResponse(BaseModel):
 
 class SourceDocument(BaseModel):
     document_id: str
-    title: Optional[str]
+    title: Optional[str] = None
     excerpt: str
     distance: float
 
@@ -210,9 +247,9 @@ class ModelRegistryItem(BaseModel):
     id: str
     tenant_id: str
     name: str
-    version: Optional[str]
-    artifact_path: Optional[str]
-    metadata: Optional[dict[str, Any]]
+    version: Optional[str] = None
+    artifact_path: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
     created_at: str
 
 
@@ -269,7 +306,7 @@ class RecommendationRequest(BaseModel):
 class RecommendationItem(BaseModel):
     product_id: str
     suggested_qty: float
-    reason: Optional[str]
+    reason: Optional[str] = None
 
 
 class RecommendationResponse(BaseModel):
@@ -283,10 +320,11 @@ class AnomalyRequest(BaseModel):
 
 
 class AnomalyItem(BaseModel):
-    entity: str
-    entity_id: str
-    score: float
-    details: Optional[dict]
+    product_id: str
+    product_reference: str
+    anomaly_score: float
+    is_anomaly: bool = True
+    reason: Optional[str] = None
 
 
 class AnomalyResponse(BaseModel):
@@ -402,23 +440,6 @@ async def model_status(_user: StaffUser):
     )
 
 
-@app.post(
-    "/api/v1/ai/chat",
-    response_model=ChatResponse,
-    tags=["llm"],
-    summary="Chat with the local Mistral LLM using ERP context",
-    description=(
-        "Sends a message to the locally-hosted Ollama model (default: mistral). "
-        "Optionally supply a `context` string with ERP data (e.g. devis lines, "
-        "stock report) to ground the model's response. "
-        "**Requires Ollama to be running and the model to be pulled** "
-        "(`docker exec erp-ollama ollama pull mistral`)."
-    ),
-    responses={
-        503: {"description": "Ollama unavailable or model not yet pulled"},
-        502: {"description": "Ollama returned an unexpected error"},
-    },
-)
 async def _persist_chat_conversation(
     tenant_id: str,
     user_id: Optional[str],
@@ -426,6 +447,7 @@ async def _persist_chat_conversation(
     user_message: str,
     assistant_message: str,
 ) -> str:
+    """Persist a chat turn to ai_conversations. Returns conversation_id."""
     if conversation_id:
         conversation = await conversation_module.get_conversation(tenant_id, conversation_id)
         if conversation is None:
@@ -444,6 +466,23 @@ async def _persist_chat_conversation(
     )
 
 
+@app.post(
+    "/api/v1/ai/chat",
+    response_model=ChatResponse,
+    tags=["llm"],
+    summary="Chat with the local Mistral LLM using ERP context",
+    description=(
+        "Sends a message to the locally-hosted Ollama model (default: mistral). "
+        "Optionally supply a `context` string with ERP data (e.g. devis lines, "
+        "stock report) to ground the model's response. "
+        "**Requires Ollama to be running and the model to be pulled** "
+        "(`docker exec erp-ollama ollama pull mistral`)."
+    ),
+    responses={
+        503: {"description": "Ollama unavailable or model not yet pulled"},
+        502: {"description": "Ollama returned an unexpected error"},
+    },
+)
 async def chat_endpoint(req: ChatRequest, _user: StaffUser):
     if not await ollama_client.is_model_available():
         raise HTTPException(
@@ -547,6 +586,38 @@ async def chat_stream_alias(req: ChatRequest, _user: AnyUser):
     return await chat_stream_endpoint(req, _user)
 
 
+@app.get(
+    "/api/v1/ai/conversations",
+    response_model=List[ConversationSummary],
+    tags=["assistant"],
+    summary="List chat conversations for the current user (most recent first)",
+)
+async def list_conversations(_user: StaffUser):
+    tenant_id = resolve_tenant(_user, None)
+    user_id   = get_user_id(_user)
+    try:
+        async with db.connection(tenant_id) as conn:
+            rows = await conn.fetch(
+                "SELECT id, created_at, messages "
+                "FROM ai_conversations "
+                "WHERE tenant_id = $1::uuid AND ($2::uuid IS NULL OR user_id = $2::uuid) "
+                "ORDER BY created_at DESC LIMIT 50",
+                tenant_id, user_id,
+            )
+        result = []
+        for r in rows:
+            msgs = r["messages"] if isinstance(r["messages"], list) else []
+            first_user = next((m.get("text", "") for m in msgs if m.get("role") == "user"), "")
+            result.append(ConversationSummary(
+                conversation_id=str(r["id"]),
+                created_at=r["created_at"].isoformat(),
+                preview=first_user[:120],
+            ))
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.post(
     "/api/v1/ai/documents/search",
     response_model=RetrievalResponse,
@@ -591,7 +662,7 @@ def _create_training_task(tenant_id: str, name: str) -> str:
         "tenant_id": tenant_id,
         "name": name,
         "status": "running",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "finished_at": None,
         "error": None,
         "result": None,
@@ -603,11 +674,11 @@ async def _run_training_task(task_id: str, coro: Any) -> None:
     try:
         result = await coro
         training_tasks[task_id]["status"] = "completed"
-        training_tasks[task_id]["finished_at"] = datetime.utcnow().isoformat()
+        training_tasks[task_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
         training_tasks[task_id]["result"] = result
     except Exception as exc:
         training_tasks[task_id]["status"] = "failed"
-        training_tasks[task_id]["finished_at"] = datetime.utcnow().isoformat()
+        training_tasks[task_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
         training_tasks[task_id]["error"] = str(exc)
 
 
@@ -772,6 +843,159 @@ async def assistant_endpoint(
     )
 
 
+@app.post(
+    "/api/v1/ai/assistant/stream",
+    response_class=StreamingResponse,
+    tags=["assistant"],
+    summary="Streaming assistant with RAG, conversation history and role-aware context",
+    responses={503: {"description": "Model unavailable or Ollama unreachable"}},
+)
+async def assistant_stream_endpoint(req: AssistantRequest, _user: AnyUser):
+    """Full-featured streaming assistant:
+    - Fetches live ERP summary for the user's role
+    - Retrieves relevant documents via pgvector (RAG)
+    - Loads conversation history for multi-turn context
+    - Builds a proper Ollama messages array (system + history + user)
+    - Streams tokens as SSE; sends sources, conversation_id and done events at the end
+    """
+    model_available = await ollama_client.is_model_available()
+
+    resolved_tenant = resolve_tenant(_user, None)
+    user_id   = get_user_id(_user)
+    user_roles: list[str] = _user.get("realm_access", {}).get("roles", []) if isinstance(_user, dict) else []
+
+    if not model_available:
+        return StreamingResponse(
+            _fallback_event_generator(resolved_tenant, user_id, user_roles, req),
+            media_type="text/event-stream",
+        )
+
+    # 1. Build role-aware system prompt with live ERP data
+    system_prompt = await context_builder.build_system_prompt(resolved_tenant, user_roles, user_id)
+
+    # 2. Load or start conversation
+    history_messages: list[dict] = []
+    conversation_id_existing: str | None = req.conversation_id
+    if conversation_id_existing:
+        conv = await conversation_module.get_conversation(resolved_tenant, conversation_id_existing)
+        if conv:
+            raw = conv.get("messages") or []
+            # Normalize: stored as {role, content} or {role, text}
+            for m in raw:
+                role    = m.get("role", "user")
+                content = m.get("content") or m.get("text", "")
+                if role in ("user", "assistant") and content:
+                    history_messages.append({"role": role, "content": content})
+        # Keep last 10 turns (20 messages) to avoid context overflow
+        history_messages = history_messages[-20:]
+
+    # 3. RAG — retrieve relevant documents
+    sources: list[dict] = []
+    if req.use_rag:
+        try:
+            sources = await indexer_module.search_documents(req.message, resolved_tenant, req.top_k)
+        except Exception as exc:
+            logger.warning("RAG search failed: %s", exc)
+
+    # 4. Build user message with RAG context injected
+    user_content = req.message
+    if sources:
+        doc_context = "\n\n".join(
+            f"[Document {i+1}: {doc['title']}]\n{doc['content'][:600]}"
+            for i, doc in enumerate(sources)
+        )
+        user_content = (
+            f"[Documents pertinents de la base de données]\n{doc_context}\n\n"
+            f"[Question de l'utilisateur]\n{req.message}"
+        )
+
+    # 5. Assemble messages array: system + history + current user message
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *history_messages,
+        {"role": "user", "content": user_content},
+    ]
+
+    # Delegate streaming logic to a helper to keep endpoint simple
+    return StreamingResponse(
+        _assistant_event_generator(messages, req, resolved_tenant, conversation_id_existing, sources, user_id),
+        media_type="text/event-stream",
+    )
+
+
+async def _fallback_event_generator(resolved_tenant: str, user_id: Optional[str], user_roles: list[str], req: AssistantRequest):
+    import json as _json
+    reply_parts: list[str] = []
+    async for token in fallback_module.stream_fallback(req.message, tenant_id=resolved_tenant, roles=user_roles, user_id=user_id):
+        reply_parts.append(token)
+        yield f"data: {_json.dumps(token)}\n\n"
+
+    full_reply = "".join(reply_parts)
+    try:
+        conv_id = await conversation_module.create_conversation(
+            resolved_tenant, user_id,
+            [{"role": "user", "content": req.message}, {"role": "assistant", "content": full_reply}],
+        )
+    except Exception:
+        conv_id = ""
+    yield f"event: conversation_id\ndata: {_json.dumps(conv_id)}\n\n"
+    yield "event: done\ndata: true\n\n"
+
+
+async def _assistant_event_generator(messages: list[dict], req: AssistantRequest, resolved_tenant: str, conversation_id_existing: Optional[str], sources: list[dict], user_id: Optional[str]):
+    import json as _json
+    reply_parts: list[str] = []
+    try:
+        async for token in ollama_client.stream_chat_messages(
+            messages,
+            temperature=req.temperature,
+            model=req.model,
+        ):
+            reply_parts.append(token)
+            # Escape newlines inside SSE data field
+            yield f"data: {_json.dumps(token)}\n\n"
+    except Exception as exc:
+        yield f"event: error\ndata: {_json.dumps(str(exc))}\n\n"
+        return
+
+    full_reply = "".join(reply_parts)
+
+    # Persist conversation
+    try:
+        new_messages = [
+            {"role": "user",      "content": req.message},
+            {"role": "assistant", "content": full_reply},
+        ]
+        if conversation_id_existing:
+            for m in new_messages:
+                await conversation_module.append_message(resolved_tenant, conversation_id_existing, m)
+            conv_id = conversation_id_existing
+        else:
+            conv_id = await conversation_module.create_conversation(
+                resolved_tenant, user_id, new_messages,
+                metadata={"source_documents": [d["document_id"] for d in sources]} if sources else None,
+            )
+    except Exception as exc:
+        logger.warning("Failed to persist conversation: %s", exc)
+        conv_id = conversation_id_existing or ""
+
+    # Send sources, conversation_id and done
+    if sources:
+        sources_payload = [
+            {
+                "document_id": d["document_id"],
+                "title":       d.get("title", ""),
+                "excerpt":     d["content"][:300],
+                "distance":    round(float(d["distance"]), 4),
+            }
+            for d in sources
+        ]
+        yield f"event: sources\ndata: {_json.dumps(sources_payload)}\n\n"
+
+    yield f"event: conversation_id\ndata: {_json.dumps(conv_id)}\n\n"
+    yield "event: done\ndata: true\n\n"
+
+
 @app.post("/api/ai/chat", response_model=ChatResponse, tags=["llm"])
 async def chat_alias(req: ChatRequest, _user: AnyUser):
     # allow any authenticated user to chat; reuse Ollama call
@@ -818,8 +1042,29 @@ async def forecast_sales(req: SalesForecastRequest, _user: AnyUser):
 @app.post("/api/ai/forecast/cashflow", response_model=CashflowForecastResponse, tags=["forecast"])
 async def forecast_cashflow(req: CashflowForecastRequest, _user: AnyUser):
     tenant_id = resolve_tenant(_user, None)
-    # Cashflow forecasting is not yet implemented; return a placeholder empty prediction set.
-    return CashflowForecastResponse(tenant_id=tenant_id, predictions=[])
+    horizon_days = req.horizon_days or 90
+    predictions = await _cashflow_heuristic(tenant_id, horizon_days)
+    return CashflowForecastResponse(tenant_id=tenant_id, predictions=predictions)
+
+
+async def _cashflow_heuristic(tenant_id: str, horizon_days: int) -> list[dict]:
+    """Simple cashflow projection based on historical encaissements (90-day average)."""
+    query = (
+        "SELECT SUM(amount)::float as total FROM encaissements "
+        "WHERE payment_date >= NOW() - INTERVAL '90 days'"
+    )
+    try:
+        async with db.connection(tenant_id) as conn:
+            row = await conn.fetchrow(query)
+        total_90 = float(row["total"] or 0)
+        avg_daily = round(total_90 / 90, 2)
+        today = date.today()
+        return [
+            {"date": (today + timedelta(days=i)).isoformat(), "net_cashflow": avg_daily}
+            for i in range(1, horizon_days + 1)
+        ]
+    except Exception:
+        return []
 
 
 @app.post("/api/ai/classification/quote-success", response_model=ClassificationResponse, tags=["classification"])
@@ -876,9 +1121,43 @@ async def classify_payment_risk(req: ClassificationRequest, _user: AnyUser):
 
 @app.post("/api/ai/recommendations/purchase", response_model=RecommendationResponse, tags=["recommendations"])
 async def recommend_purchase(req: RecommendationRequest, _user: AnyUser):
-    # Simple stub: no recommendations
     tenant_id = resolve_tenant(_user, None)
-    return RecommendationResponse(tenant_id=tenant_id, recommendations=[])
+    recommendations = await _purchase_recommendations(tenant_id)
+    return RecommendationResponse(tenant_id=tenant_id, recommendations=recommendations)
+
+
+async def _purchase_recommendations(tenant_id: str) -> list[dict]:
+    """Recommend replenishment for stock items below min_quantity."""
+    query = (
+        "SELECT si.product_id::text, si.product_reference, "
+        "si.quantity::float as quantity, si.min_quantity::float as min_quantity, "
+        "COALESCE(("
+        "  SELECT AVG(sm.quantity)::float FROM stock_movements sm "
+        "  WHERE sm.product_id = si.product_id AND sm.tenant_id = si.tenant_id "
+        "  AND sm.movement_type = 'SORTIE' AND sm.created_at >= NOW() - INTERVAL '30 days'"
+        "), 0) as avg_daily_sortie "
+        "FROM stock_items si "
+        "WHERE si.quantity <= si.min_quantity AND si.min_quantity > 0 "
+        "LIMIT 20"
+    )
+    try:
+        async with db.connection(tenant_id) as conn:
+            rows = await conn.fetch(query)
+        result = []
+        for r in rows:
+            avg_daily = float(r["avg_daily_sortie"] or 0)
+            qty_needed = max(float(r["min_quantity"]) * 3 - float(r["quantity"]), avg_daily * 30, 1.0)
+            result.append({
+                "product_id": r["product_id"],
+                "suggested_qty": round(qty_needed, 2),
+                "reason": (
+                    f"Stock {r['product_reference']}: {r['quantity']:.1f} unités "
+                    f"(seuil min: {r['min_quantity']:.1f})"
+                ),
+            })
+        return result
+    except Exception:
+        return []
 
 
 @app.post("/api/ai/anomalies", response_model=AnomalyResponse, tags=["anomalies"])
@@ -894,21 +1173,49 @@ async def detect_anomalies(req: AnomalyRequest, _user: AnyUser):
         tenant_id=tenant_id,
         anomalies=[
             AnomalyItem(
-                entity=a["entity"],
-                entity_id=a["entity_id"],
-                score=a["score"],
-                details=a.get("details"),
+                product_id=a["entity_id"],
+                product_reference=a.get("details", {}).get("movement_type") or a["entity"],
+                anomaly_score=round(a["score"], 4),
+                is_anomaly=True,
+                reason=a.get("details", {}).get("created_at", "")[:10] if a.get("details") else None,
             )
             for a in anomalies
         ],
     )
 
 
+@app.post("/api/v1/ai/anomalies", response_model=AnomalyResponse, tags=["anomalies"])
+async def detect_anomalies_v1(req: AnomalyRequest, _user: AnyUser):
+    return await detect_anomalies(req, _user)
+
+
+@app.post("/api/v1/ai/recommendations/purchase", response_model=RecommendationResponse, tags=["recommendations"])
+async def recommend_purchase_v1(req: RecommendationRequest, _user: AnyUser):
+    return await recommend_purchase(req, _user)
+
+
 @app.post("/api/ai/index/devis", tags=["admin"], summary="Index recent devis into ai_documents/ai_embeddings")
 async def index_devis_endpoint(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))]):
-    # Trigger indexing in background
-    asyncio.create_task(indexer_module.index_devis(200))
-    return {"status": "accepted", "message": "Indexing started (background)"}
+    _schedule(indexer_module.index_devis(200))
+    return {"status": "accepted", "message": "Devis indexing started (background)"}
+
+
+@app.post("/api/ai/index/factures", tags=["admin"], summary="Index recent factures into ai_documents/ai_embeddings")
+async def index_factures_endpoint(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))]):
+    _schedule(indexer_module.index_factures(200))
+    return {"status": "accepted", "message": "Factures indexing started (background)"}
+
+
+@app.post("/api/ai/index/commandes", tags=["admin"], summary="Index recent commandes into ai_documents/ai_embeddings")
+async def index_commandes_endpoint(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))]):
+    _schedule(indexer_module.index_commandes(200))
+    return {"status": "accepted", "message": "Commandes indexing started (background)"}
+
+
+@app.post("/api/ai/index/all", tags=["admin"], summary="Index all sources (devis, factures, commandes) in background")
+async def index_all_legacy_endpoint(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))]):
+    _schedule(indexer_module.index_all(limit=200))
+    return {"status": "accepted", "message": "Full indexing started (background)"}
 
 
 @app.post("/api/v1/ai/train/forecast", tags=["training"], summary="Train or retrain the sales forecast model")
@@ -916,7 +1223,7 @@ async def train_forecast(_user: Annotated[dict, Depends(auth.require_roles("SUPE
     ensure_training_available()
     tenant_id = resolve_tenant(_user, x_tenant_id)
     task_id = _create_training_task(tenant_id, "sales_forecast_prophet")
-    asyncio.create_task(_run_training_task(task_id, prophet_trainer.train_sales_forecast_model(tenant_id)))
+    _schedule(_run_training_task(task_id, prophet_trainer.train_sales_forecast_model(tenant_id)))
     return {"status": "accepted", "message": "Sales forecast training started", "task_id": task_id}
 
 
@@ -925,7 +1232,7 @@ async def train_quote_classifier(_user: Annotated[dict, Depends(auth.require_rol
     ensure_training_available()
     tenant_id = resolve_tenant(_user, x_tenant_id)
     task_id = _create_training_task(tenant_id, "quote_acceptance_xgboost")
-    asyncio.create_task(_run_training_task(task_id, xgboost_trainer.train_quote_acceptance_model(tenant_id)))
+    _schedule(_run_training_task(task_id, xgboost_trainer.train_quote_acceptance_model(tenant_id)))
     return {"status": "accepted", "message": "Quote acceptance training started", "task_id": task_id}
 
 
@@ -934,7 +1241,7 @@ async def train_payment_risk(_user: Annotated[dict, Depends(auth.require_roles("
     ensure_training_available()
     tenant_id = resolve_tenant(_user, x_tenant_id)
     task_id = _create_training_task(tenant_id, "payment_risk_xgboost")
-    asyncio.create_task(_run_training_task(task_id, xgboost_trainer.train_payment_risk_model(tenant_id)))
+    _schedule(_run_training_task(task_id, xgboost_trainer.train_payment_risk_model(tenant_id)))
     return {"status": "accepted", "message": "Payment risk training started", "task_id": task_id}
 
 
@@ -951,14 +1258,14 @@ async def train_stock_anomaly(_user: Annotated[dict, Depends(auth.require_roles(
     ensure_training_available()
     tenant_id = resolve_tenant(_user, x_tenant_id)
     task_id = _create_training_task(tenant_id, "stock_anomaly_iforest")
-    asyncio.create_task(_run_training_task(task_id, anomaly_trainer.train_stock_anomaly_model(tenant_id)))
+    _schedule(_run_training_task(task_id, anomaly_trainer.train_stock_anomaly_model(tenant_id)))
     return {"status": "accepted", "message": "Stock anomaly model training started", "task_id": task_id}
 
 
 @app.post("/api/v1/ai/train/all", tags=["training"], summary="Schedule all available AI model training pipelines")
 async def train_all_models(
     req: TrainAllRequest,
-    _user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))],
+    _user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN", "EMPLOYER"))],
     x_tenant_id: Annotated[Optional[str], Header()] = None,
 ):
     ensure_training_available()
@@ -968,22 +1275,22 @@ async def train_all_models(
 
     if "forecast" in requested:
         task_id = _create_training_task(tenant_id, "sales_forecast_prophet")
-        asyncio.create_task(_run_training_task(task_id, prophet_trainer.train_sales_forecast_model(tenant_id)))
+        _schedule(_run_training_task(task_id, prophet_trainer.train_sales_forecast_model(tenant_id)))
         jobs["forecast"] = task_id
 
     if "quote" in requested:
         task_id = _create_training_task(tenant_id, "quote_acceptance_xgboost")
-        asyncio.create_task(_run_training_task(task_id, xgboost_trainer.train_quote_acceptance_model(tenant_id)))
+        _schedule(_run_training_task(task_id, xgboost_trainer.train_quote_acceptance_model(tenant_id)))
         jobs["quote"] = task_id
 
     if "payment-risk" in requested:
         task_id = _create_training_task(tenant_id, "payment_risk_xgboost")
-        asyncio.create_task(_run_training_task(task_id, xgboost_trainer.train_payment_risk_model(tenant_id)))
+        _schedule(_run_training_task(task_id, xgboost_trainer.train_payment_risk_model(tenant_id)))
         jobs["payment-risk"] = task_id
 
     if "stock" in requested:
         task_id = _create_training_task(tenant_id, "stock_anomaly_iforest")
-        asyncio.create_task(_run_training_task(task_id, anomaly_trainer.train_stock_anomaly_model(tenant_id)))
+        _schedule(_run_training_task(task_id, anomaly_trainer.train_stock_anomaly_model(tenant_id)))
         jobs["stock"] = task_id
 
     return {"status": "accepted", "jobs": jobs}
@@ -998,7 +1305,7 @@ async def training_status(task_id: str, _user: Annotated[dict, Depends(auth.requ
 
 
 @app.get("/api/v1/ai/train/tasks", response_model=List[TrainingTaskResponse], tags=["training"], summary="List background training jobs for the current tenant")
-async def list_training_tasks(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN"))], x_tenant_id: Annotated[Optional[str], Header()] = None):
+async def list_training_tasks(_user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN", "EMPLOYER"))], x_tenant_id: Annotated[Optional[str], Header()] = None):
     tenant_id = resolve_tenant(_user, x_tenant_id)
     tasks = [TrainingTaskResponse(**task) for task in training_tasks.values() if task["tenant_id"] == tenant_id]
     return tasks
@@ -1006,7 +1313,8 @@ async def list_training_tasks(_user: Annotated[dict, Depends(auth.require_roles(
 
 @app.get("/api/v1/ai/models", response_model=List[ModelRegistryItem], tags=["models"], summary="List persisted AI models for the current tenant")
 async def list_models(_user: AnyUser, x_tenant_id: Annotated[Optional[str], Header()] = None):
-    ensure_training_available()
+    if not TRAINING_FEATURES_AVAILABLE:
+        return []
     tenant_id = resolve_tenant(_user, x_tenant_id)
     models = await model_store.list_models(tenant_id)
     return [ModelRegistryItem(**m) for m in models]
@@ -1022,8 +1330,20 @@ async def get_latest_model(model_name: str, _user: AnyUser, x_tenant_id: Annotat
     return ModelRegistryItem(**model_row)
 
 
-@app.post("/api/v1/ai/retrieval", response_model=RetrievalResponse, tags=["rag"])
-@app.post("/api/ai/retrieval", response_model=RetrievalResponse, tags=["rag"])
+@app.post(
+    "/api/v1/ai/retrieval",
+    response_model=RetrievalResponse,
+    tags=["rag"],
+    responses={
+        500: {"description": "DATABASE_URL not configured"},
+        503: {"description": "Embedding or Ollama error"},
+    },
+)
+@app.post(
+    "/api/ai/retrieval",
+    response_model=RetrievalResponse,
+    tags=["rag"],
+)
 async def retrieval(req: RetrievalRequest, _user: AnyUser, x_tenant_id: Annotated[Optional[str], Header()] = None):
     if not DB_URL:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
@@ -1035,10 +1355,7 @@ async def retrieval(req: RetrievalRequest, _user: AnyUser, x_tenant_id: Annotate
         query_embedding = None
 
     if not query_embedding:
-        query_embedding = indexer_module.deterministic_embedding(req.query)
-        embedding_source = "poc-deterministic"
-    else:
-        embedding_source = f"ollama-{ollama_client.OLLAMA_MODEL}"
+        query_embedding = embedder_module.deterministic_embedding(req.query)
 
     vec_literal = "[" + ",".join(f"{float(x):.6f}" for x in query_embedding) + "]"
 
@@ -1055,7 +1372,12 @@ async def retrieval(req: RetrievalRequest, _user: AnyUser, x_tenant_id: Annotate
         return RetrievalResponse(tenant_id=resolved_tenant, results=results)
 
 
-@app.post("/api/ai/retrieval_noauth", response_model=RetrievalResponse, tags=["rag"])
+@app.post(
+    "/api/ai/retrieval_noauth",
+    response_model=RetrievalResponse,
+    tags=["rag"],
+    responses={403: {"description": "DEV_AUTH_BYPASS not enabled"}, 500: {"description": "DATABASE_URL not configured"}},
+)
 async def retrieval_noauth(req: RetrievalRequest):
     """Development-only retrieval endpoint that bypasses authentication when
     `DEV_AUTH_BYPASS=true` is set. This is intended for local testing only.
@@ -1066,7 +1388,7 @@ async def retrieval_noauth(req: RetrievalRequest):
     if not DB_URL:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
 
-    vec = indexer_module.deterministic_embedding(req.query)
+    vec = embedder_module.deterministic_embedding(req.query)
     vec_literal = "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
 
     sql = (
@@ -1079,4 +1401,204 @@ async def retrieval_noauth(req: RetrievalRequest):
     async with db.connection(req.tenant_id or "") as conn:
         rows = await conn.fetch(sql, req.tenant_id, req.k)
         results = [RetrievalItem(document_id=str(r["document_id"]), title=r["title"], content=r["content"], distance=float(r["distance"])) for r in rows]
-        return RetrievalResponse(tenant_id=req.tenant_id, results=results)
+        return RetrievalResponse(tenant_id=req.tenant_id or "", results=results)
+
+
+# ── Dashboard Insights ────────────────────────────────────────────────────────
+
+class MonthlyRevenue(BaseModel):
+    month: str
+    revenue: float
+    count: int
+
+
+class StockRiskDistribution(BaseModel):
+    critical: int
+    high: int
+    medium: int
+    low: int
+
+
+class QuoteConversion(BaseModel):
+    month: str
+    total: int
+    accepted: int
+    rate: float
+
+
+class DashboardInsightsResponse(BaseModel):
+    tenant_id: str
+    monthly_revenue: List[MonthlyRevenue]
+    revenue_forecast: List[SalesForecastPoint]
+    stock_risk: StockRiskDistribution
+    quote_conversion: List[QuoteConversion]
+    docs_indexed: int
+    upcoming_due_invoices: list[dict] = []
+
+
+async def _get_monthly_revenue(tenant_id: str, months: int = 12) -> List[MonthlyRevenue]:
+    async with db.connection(tenant_id) as conn:
+        rows = await conn.fetch(
+            """
+            SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+                   COALESCE(SUM(total_ttc), 0)::float                   AS revenue,
+                   COUNT(*)::int                                         AS count
+            FROM devis
+            WHERE status = 'ACCEPTE'
+              AND created_at >= NOW() - ($1 * INTERVAL '1 month')
+              AND total_ttc IS NOT NULL
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+            """,
+            months,
+        )
+    return [MonthlyRevenue(month=r["month"], revenue=r["revenue"], count=r["count"]) for r in rows]
+
+
+async def _get_upcoming_due_invoices(tenant_id: str, days: int = 7) -> list[dict]:
+    try:
+        async with db.connection(tenant_id) as conn:
+            rows = await conn.fetch(
+                """
+                SELECT f.reference, c.name AS client_name, f.total_ttc::numeric(14,2) AS montant, f.due_date
+                FROM factures f
+                LEFT JOIN clients c ON c.id = f.client_id AND c.tenant_id = f.tenant_id
+                WHERE f.due_date IS NOT NULL
+                  AND f.due_date <= CURRENT_DATE + ($1 * INTERVAL '1 day')
+                  AND f.status IN ('EMISE','PARTIELLEMENT_PAYEE')
+                  AND f.tenant_id = $2::uuid
+                ORDER BY f.due_date ASC
+                LIMIT 20
+                """,
+                days, tenant_id,
+            )
+        result = []
+        from datetime import date
+        today = date.today()
+        for r in rows:
+            due = r['due_date']
+            days_to_due = (due.date() - today).days if hasattr(due, 'date') else None
+            result.append({
+                'reference': r['reference'],
+                'client_name': r['client_name'],
+                'montant': float(r['montant'] or 0),
+                'due_date': r['due_date'].isoformat() if r['due_date'] else None,
+                'days_to_due': days_to_due,
+            })
+        return result
+    except Exception:
+        return []
+
+
+async def _get_quote_conversion(tenant_id: str, months: int = 6) -> List[QuoteConversion]:
+    async with db.connection(tenant_id) as conn:
+        rows = await conn.fetch(
+            """
+            SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+                   COUNT(*)::int                                         AS total,
+                   COUNT(*) FILTER (WHERE status = 'ACCEPTE')::int      AS accepted
+            FROM devis
+            WHERE created_at >= NOW() - ($1 * INTERVAL '1 month')
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at)
+            """,
+            months,
+        )
+    result = []
+    for r in rows:
+        total = r["total"] or 0
+        accepted = r["accepted"] or 0
+        rate = round(accepted / total, 3) if total > 0 else 0.0
+        result.append(QuoteConversion(month=r["month"], total=total, accepted=accepted, rate=rate))
+    return result
+
+
+async def _get_stock_risk(tenant_id: str) -> StockRiskDistribution:
+    try:
+        async with db.connection(tenant_id) as conn:
+            rows = await conn.fetch(
+                """
+                SELECT quantity::float                          AS qty,
+                       COALESCE(reorder_point, 0)::float       AS reorder
+                FROM stock_items
+                WHERE product_reference IS NOT NULL
+                LIMIT 200
+                """
+            )
+        dist = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for r in rows:
+            qty = float(r["qty"] or 0)
+            reorder = float(r["reorder"] or 0)
+            if qty == 0:
+                dist["critical"] += 1
+            elif qty <= reorder:
+                dist["high"] += 1
+            elif qty <= reorder * 2:
+                dist["medium"] += 1
+            else:
+                dist["low"] += 1
+        return StockRiskDistribution(**dist)
+    except Exception:
+        return StockRiskDistribution(critical=0, high=0, medium=0, low=0)
+
+
+async def _count_indexed_docs(tenant_id: str) -> int:
+    try:
+        async with db.connection(tenant_id) as conn:
+            return await conn.fetchval("SELECT COUNT(*) FROM ai_documents WHERE tenant_id = $1", tenant_id) or 0
+    except Exception:
+        return 0
+
+
+@app.get(
+    "/api/v1/ai/dashboard-insights",
+    response_model=DashboardInsightsResponse,
+    tags=["dashboard"],
+    summary="AI-computed insights for the employer dashboard (revenue trend, stock risk, funnel)",
+)
+async def dashboard_insights(
+    _user: AnyUser,
+    x_tenant_id: Annotated[Optional[str], Header()] = None,
+):
+    tenant_id = resolve_tenant(_user, x_tenant_id)
+
+    monthly_revenue, quote_conversion, stock_risk, docs_indexed = await asyncio.gather(
+        _get_monthly_revenue(tenant_id),
+        _get_quote_conversion(tenant_id),
+        _get_stock_risk(tenant_id),
+        _count_indexed_docs(tenant_id),
+    )
+    upcoming_due_invoices = await _get_upcoming_due_invoices(tenant_id, 7)
+
+    # Try Prophet forecast (requires trained model) — silent fallback to empty
+    revenue_forecast: List[SalesForecastPoint] = []
+    if TRAINING_FEATURES_AVAILABLE:
+        try:
+            raw = await model_inference.predict_sales_forecast(tenant_id, 30)
+            revenue_forecast = [SalesForecastPoint(date=p["date"], predicted_amount=p["predicted_amount"]) for p in raw]
+        except Exception:
+            pass
+
+    return DashboardInsightsResponse(
+        tenant_id=tenant_id,
+        monthly_revenue=monthly_revenue,
+        revenue_forecast=revenue_forecast,
+        stock_risk=stock_risk,
+        quote_conversion=quote_conversion,
+        docs_indexed=docs_indexed,
+        upcoming_due_invoices=upcoming_due_invoices,
+    )
+
+
+@app.post(
+    "/api/v1/ai/index/all",
+    tags=["admin"],
+    summary="Trigger a full re-indexing of all business data (devis, factures, stock, clients)",
+)
+async def index_all_endpoint(
+    _user: Annotated[dict, Depends(auth.require_roles("SUPER_ADMIN", "EMPLOYER"))],
+    x_tenant_id: Annotated[Optional[str], Header()] = None,
+):
+    tenant_id = resolve_tenant(_user, x_tenant_id)
+    _schedule(indexer_module.index_all(tenant_id))
+    return {"status": "accepted", "message": "Full re-indexing started in background", "tenant_id": tenant_id}

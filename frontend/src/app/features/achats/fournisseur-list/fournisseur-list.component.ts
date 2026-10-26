@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   AchatService, FournisseurResponse, FournisseurCreateRequest
 } from '../../../core/services/achat.service';
@@ -8,7 +9,7 @@ import {
 @Component({
   selector: 'app-fournisseur-list',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MatSnackBarModule],
   template: `
     <div class="page-header">
       <h2>Fournisseurs</h2>
@@ -103,7 +104,8 @@ import {
 })
 export class FournisseurListComponent implements OnInit {
   private achatService = inject(AchatService);
-  private fb = inject(FormBuilder);
+  private fb           = inject(FormBuilder);
+  private snack        = inject(MatSnackBar);
 
   fournisseurs: FournisseurResponse[] = [];
   currentPage = 0;
@@ -158,8 +160,17 @@ export class FournisseurListComponent implements OnInit {
       : this.achatService.createFournisseur({ code: v.code!, nom: v.nom!, telephone: v.telephone || undefined, email: v.email || undefined, ice: v.ice || undefined, rc: v.rc || undefined, rib: v.rib || undefined, delaiPaiementJours: v.delaiPaiementJours || undefined, adresse: v.adresse || undefined });
 
     obs.subscribe({
-      next: () => { this.saving = false; this.closeForm(); this.loadPage(this.currentPage); },
-      error: () => { this.saving = false; },
+      next: () => {
+        this.saving = false;
+        this.closeForm();
+        this.snack.open(this.editId ? 'Fournisseur mis à jour' : 'Fournisseur créé', 'OK', { duration: 3000 });
+        this.loadPage(this.currentPage);
+      },
+      error: (err) => {
+        this.saving = false;
+        const msg = err?.error?.message || (this.editId ? 'Erreur lors de la mise à jour' : 'Erreur lors de la création');
+        this.snack.open(msg, 'Fermer', { duration: 4000 });
+      },
     });
   }
 

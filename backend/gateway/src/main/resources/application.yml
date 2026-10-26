@@ -89,10 +89,29 @@ spring:
             - StripPrefix=0
             - TenantHeaderFilter
 
+        - id: ai-service-stream
+          uri: http://ai-service:8000
+          predicates:
+            - Path=/api/v1/ai/assistant/stream,/api/v1/ai/chat/stream,/api/ai/chat/stream
+          metadata:
+            response-timeout: 300000
+            connect-timeout: 10000
+          filters:
+            - StripPrefix=0
+            - TenantHeaderFilter
+
         - id: ai-service
           uri: http://ai-service:8000
           predicates:
             - Path=/api/v1/ai/**
+          filters:
+            - StripPrefix=0
+            - TenantHeaderFilter
+
+        - id: ai-service-legacy
+          uri: http://ai-service:8000
+          predicates:
+            - Path=/api/ai/**
           filters:
             - StripPrefix=0
             - TenantHeaderFilter

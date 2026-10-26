@@ -63,5 +63,12 @@ logs/
 # ── Nested repo clone (à ne pas versionner) ───
 PFA_CRM_ERP_Platform/
 
-# ── Claude Code internal files ────────────────
+# ── Local tooling ─────────────────────────────
 .claude/
+
+# ── Separate project (published in its own repository) ──
+ChatBotGC/
+
+# ── Root tooling ──
+/package.json
+/package-lock.json

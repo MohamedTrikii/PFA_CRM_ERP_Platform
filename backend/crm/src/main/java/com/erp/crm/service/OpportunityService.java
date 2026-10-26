@@ -2,7 +2,7 @@ package com.erp.crm.service;
 
 import com.erp.common.audit.AuditAction;
 import com.erp.common.audit.Auditable;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import com.erp.crm.domain.Opportunity;
 import com.erp.crm.domain.OpportunityStatus;
 import com.erp.crm.dto.OpportunityDto;
@@ -16,10 +16,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class OpportunityService {
 
     private final OpportunityRepository repo;
@@ -38,7 +40,7 @@ public class OpportunityService {
     public OpportunityDto.Response create(OpportunityDto.CreateRequest req) {
         Opportunity o = mapper.toEntity(req);
         o.setTenantId(tenantId());
-        return mapper.toResponse(repo.save(o));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(o)));
     }
 
     @Transactional
@@ -46,7 +48,7 @@ public class OpportunityService {
     public OpportunityDto.Response update(UUID id, OpportunityDto.UpdateRequest req) {
         Opportunity o = get(id);
         mapper.updateEntity(req, o);
-        return mapper.toResponse(repo.save(o));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(o)));
     }
 
     @Transactional
@@ -62,5 +64,5 @@ public class OpportunityService {
             .orElseThrow(() -> new EntityNotFoundException("Opportunity not found: " + id));
     }
 
-    private UUID tenantId() { return UUID.fromString(TenantContext.requireTenant()); }
+    private UUID tenantId() { return TenantUtils.safeTenantUuid(); }
 }

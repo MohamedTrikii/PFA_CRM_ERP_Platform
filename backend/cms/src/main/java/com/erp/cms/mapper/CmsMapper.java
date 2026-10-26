@@ -14,11 +14,12 @@ import java.util.List;
 )
 public interface CmsMapper {
 
-    @Mapping(target = "logoUrl",    ignore = true)
-    @Mapping(target = "faviconUrl", ignore = true)
-    CmsDto.BrandingResponse toBrandingResponse(TenantBranding b);
-
+    /**
+     * Partial update: copies only non-null fields from the request onto the entity.
+     * Gallery is managed via dedicated upload/delete endpoints, so galleryJson is excluded.
+     */
     @BeanMapping(builder = @Builder(disableBuilder = true))
+    @Mapping(target = "galleryJson", ignore = true)  // managed separately
     void updateBranding(CmsDto.BrandingUpdateRequest req, @MappingTarget TenantBranding b);
 
     CmsDto.NoticeResponse toNoticeResponse(TenantNotice n);

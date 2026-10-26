@@ -1,6 +1,6 @@
 package com.erp.sales.service;
 
-import com.erp.common.tenant.TenantContext;
+// removed unused TenantContext import
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.*;
 import com.erp.sales.mapper.SalesMapper;
@@ -118,7 +118,7 @@ public class PortalService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 
     private static String snapshotStr(Map<String, Object> snap, String key) {

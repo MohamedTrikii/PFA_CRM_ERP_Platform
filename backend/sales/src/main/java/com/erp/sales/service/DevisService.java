@@ -3,7 +3,7 @@ package com.erp.sales.service;
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
 import com.erp.common.reference.DocumentReferenceGenerator;
-import com.erp.common.tenant.TenantContext;
+// removed unused TenantContext import
 import com.erp.sales.command.AccepterDevisCommand;
 import com.erp.sales.command.DevisCommandInvoker;
 import com.erp.sales.command.EnvoyerDevisCommand;
@@ -126,6 +126,6 @@ public class DevisService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

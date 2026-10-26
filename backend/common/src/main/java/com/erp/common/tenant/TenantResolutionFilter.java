@@ -29,10 +29,8 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain chain) throws ServletException, IOException {
         try {
             String tenantId = request.getHeader(TENANT_HEADER);
-            if (tenantId == null || tenantId.isBlank()) {
-                if (isPublicSalesRequest(request)) {
-                    tenantId = SYSTEM_TENANT;
-                }
+            if ((tenantId == null || tenantId.isBlank()) && isPublicSalesRequest(request)) {
+                tenantId = SYSTEM_TENANT;
             }
             if (tenantId != null && !tenantId.isBlank()) {
                 TenantContext.set(tenantId.trim());

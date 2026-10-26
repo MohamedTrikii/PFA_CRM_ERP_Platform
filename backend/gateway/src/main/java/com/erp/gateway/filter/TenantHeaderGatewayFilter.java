@@ -24,7 +24,7 @@ public class TenantHeaderGatewayFilter extends AbstractGatewayFilterFactory<Obje
         return (exchange, chain) ->
             ReactiveSecurityContextHolder.getContext()
                 .map(ctx -> ctx.getAuthentication())
-                .filter(auth -> auth instanceof JwtAuthenticationToken)
+                .filter(JwtAuthenticationToken.class::isInstance)
                 .cast(JwtAuthenticationToken.class)
                 .map(JwtAuthenticationToken::getToken)
                 .map(jwt -> {

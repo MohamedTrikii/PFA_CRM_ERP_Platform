@@ -25,6 +25,11 @@ export interface LivraisonSummary {
   id: string; commandeId: string; reference: string; status: string;
   deliveryDate: string; createdAt: string;
 }
+export interface LivraisonLineResponse {
+  id: string; productId: string; productReference: string;
+  quantityOrdered: number; quantityDelivered: number;
+}
+export interface LivraisonResponse extends LivraisonSummary { lines: LivraisonLineResponse[]; }
 export interface FactureSummary {
   id: string; clientId: string; reference: string; status: string;
   dueDate: string; totalTtc: number; amountPaid: number; createdAt: string;
@@ -72,14 +77,31 @@ export class SalesService {
   getCommandes(page = 0, size = 20): Observable<Page<CommandeResponse>> {
     return this.http.get<Page<CommandeResponse>>(`${BASE}/commandes`, { params: { page, size } });
   }
+  transitionCommande(id: string, targetStatus: string): Observable<CommandeResponse> {
+    return this.http.patch<CommandeResponse>(`${BASE}/commandes/${id}/status`, { targetStatus });
+  }
 
   // Livraisons
   getLivraisons(page = 0, size = 20): Observable<Page<LivraisonSummary>> {
     return this.http.get<Page<LivraisonSummary>>(`${BASE}/livraisons`, { params: { page, size } });
   }
+  getLivraisonById(id: string): Observable<LivraisonResponse> {
+    return this.http.get<LivraisonResponse>(`${BASE}/livraisons/${id}`);
+  }
+  /** Step 1: PLANIFIEE → EN_COURS with delivery quantities */
+  deliverLivraison(id: string, body: { deliveryDate?: string; lines: { lineId: string; quantityDelivered: number }[] }): Observable<LivraisonResponse> {
+    return this.http.patch<LivraisonResponse>(`${BASE}/livraisons/${id}/deliver`, body);
+  }
+  /** Step 2: EN_COURS → LIVREE — triggers stock SORTIE event */
+  confirmLivraison(id: string): Observable<LivraisonResponse> {
+    return this.http.post<LivraisonResponse>(`${BASE}/livraisons/${id}/confirm`, {});
+  }
 
   // Factures
   getFactures(page = 0, size = 20): Observable<Page<FactureSummary>> {
     return this.http.get<Page<FactureSummary>>(`${BASE}/factures`, { params: { page, size } });
+  }
+  encaisserFacture(id: string, amount: number, paymentMethod: string, reference?: string): Observable<FactureSummary> {
+    return this.http.post<FactureSummary>(`${BASE}/factures/${id}/encaisser`, { amount, paymentMethod, reference });
   }
 }

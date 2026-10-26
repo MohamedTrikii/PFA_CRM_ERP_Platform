@@ -1,0 +1,16 @@
+{
+  "tenant_id": "demo-tenant",
+  "monthly_revenue": [
+    { "month": "2026-01", "revenue": 45200, "count": 12 },
+    { "month": "2026-02", "revenue": 38400, "count": 9 },
+    { "month": "2026-03", "revenue": 49800, "count": 15 }
+  ],
+  "revenue_forecast": [
+    { "date": "2026-06-01", "predicted_amount": 5200 },
+    { "date": "2026-06-02", "predicted_amount": 5300 }
+  ],
+  "stock_risk": { "critical": 2, "high": 3, "medium": 5, "low": 40 },
+  "quote_conversion": [ { "month": "2026-03", "total": 15, "accepted": 9, "rate": 0.6 } ],
+  "docs_indexed": 24,
+  "upcoming_due_invoices": [ { "reference": "FAC-2026-001", "client_name": "Aluminium Pro SARL", "montant": 12400, "due_date": "2026-06-10", "days_to_due": 3 } ]
+}

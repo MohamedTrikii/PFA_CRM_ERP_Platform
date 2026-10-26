@@ -1,6 +1,6 @@
 package com.erp.sales.service;
 
-import com.erp.common.tenant.TenantContext;
+// removed unused TenantContext import
 import com.erp.sales.domain.Facture;
 import com.erp.sales.dto.AgingDto;
 import com.erp.sales.repository.FactureRepository;
@@ -21,7 +21,7 @@ public class FactureAgingService {
 
     private final FactureRepository factureRepo;
 
-    private static UUID tid() { return UUID.fromString(TenantContext.requireTenant()); }
+    private static UUID tid() { return com.erp.common.tenant.TenantUtils.safeTenantUuid(); }
 
     public AgingDto.AgingReport summary() {
         List<Facture> unpaid = factureRepo.findUnpaidByTenant(tid());

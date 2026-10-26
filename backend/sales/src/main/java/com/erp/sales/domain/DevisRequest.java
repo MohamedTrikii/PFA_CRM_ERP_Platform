@@ -38,7 +38,6 @@ public class DevisRequest extends TenantEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    @Builder.Default
     private DevisRequestStatus status = DevisRequestStatus.NOUVEAU;
 
     @Column(name = "converted_devis_id")
@@ -49,6 +48,5 @@ public class DevisRequest extends TenantEntity {
 
     @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position ASC")
-    @Builder.Default
     private List<DevisRequestItem> items = new ArrayList<>();
 }

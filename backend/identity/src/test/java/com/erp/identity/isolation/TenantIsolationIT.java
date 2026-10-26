@@ -21,6 +21,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TenantIsolationIT {
 
     @Container
+    @SuppressWarnings("resource")
     static PostgreSQLContainer<?> postgres =
         new PostgreSQLContainer<>("pgvector/pgvector:pg16")
             .withDatabaseName("erp_test")
@@ -70,9 +72,9 @@ class TenantIsolationIT {
     void setUp() {
         // Create two separate tenants (no RLS on tenants table)
         tenantA = tenantRepository.save(
-            Tenant.builder().slug("tenant-alpha").name("Alpha Co.").build());
+            Objects.requireNonNull(Tenant.builder().slug("tenant-alpha").name("Alpha Co.").build()));
         tenantB = tenantRepository.save(
-            Tenant.builder().slug("tenant-beta").name("Beta Co.").build());
+            Objects.requireNonNull(Tenant.builder().slug("tenant-beta").name("Beta Co.").build()));
 
         // Insert userA directly with tenantA's id (bypassing TenantContext for setup)
         userA = new User();

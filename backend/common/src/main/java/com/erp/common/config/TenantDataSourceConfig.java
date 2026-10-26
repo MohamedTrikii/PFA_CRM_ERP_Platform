@@ -81,10 +81,12 @@ public class TenantDataSourceConfig {
         private Connection tenanted(Connection conn) throws SQLException {
             String tenantId = TenantContext.get();
             // Empty string → PostgreSQL current_tenant_id() returns NULL → RLS blocks all rows
-            String value = (tenantId != null && !tenantId.isBlank()) ? tenantId : "";
+            String tenantValue = (tenantId != null && !tenantId.isBlank()) ? tenantId : "";
+            String superAdminValue = TenantContext.isSuperAdmin() ? "true" : "false";
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT set_config('app.tenant_id', ?, FALSE)")) {
-                ps.setString(1, value);
+                    "SELECT set_config('app.tenant_id', ?, FALSE); SELECT set_config('app.is_super_admin', ?, FALSE);")) {
+                ps.setString(1, tenantValue);
+                ps.setString(2, superAdminValue);
                 ps.execute();
             }
             return conn;

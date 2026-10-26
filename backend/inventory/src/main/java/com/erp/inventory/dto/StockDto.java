@@ -43,6 +43,17 @@ public interface StockDto {
             Instant occurredAt
     ) {}
 
+    record MovementCreate(
+            @NotNull UUID productId,
+            String productReference,
+            UUID locationId,
+            @NotNull MovementType movementType,
+            @NotNull @Positive BigDecimal quantity,
+            String referenceType,
+            UUID referenceId,
+            String notes
+    ) {}
+
     record AdjustRequest(
             @NotNull UUID productId,
             UUID locationId,

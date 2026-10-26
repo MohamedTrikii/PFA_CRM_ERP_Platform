@@ -7,11 +7,8 @@ COPY requirements.docker.txt .
 # Prefer a lightweight docker-specific requirements file when present to avoid
 # building heavy ML dependencies during development. If not present, fall back
 # to the full `requirements.txt`.
-RUN if [ -f requirements.docker.txt ] && [ -s requirements.docker.txt ]; then \
-			pip install --no-cache-dir -r requirements.docker.txt ; \
-		else \
-			pip install --no-cache-dir -r requirements.txt ; \
-		fi
+RUN pip install --no-cache-dir --timeout 300 --retries 5 \
+        $([ -f requirements.docker.txt ] && [ -s requirements.docker.txt ] && echo "-r requirements.docker.txt" || echo "-r requirements.txt")
 
 COPY app/ ./app/
 

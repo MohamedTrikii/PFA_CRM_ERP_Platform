@@ -2,62 +2,91 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+// ── Public-site content types ─────────────────────────────────────────────────
+
+export interface GalleryItem { fid: string; url: string; caption: string; alt: string; }
+export interface ServiceItem { title: string; description: string; icon: string; }
+export interface StatItem    { label: string; value: string; }
+
 export interface BrandingResponse {
-  id: string;
-  companyName: string;
-  tagline: string;
-  logoUrl: string | null;
-  faviconUrl: string | null;
-  primaryColor: string;
+  id:             string;
+  companyName:    string;
+  tagline:        string;
+  logoUrl:        string | null;
+  faviconUrl:     string | null;
+  primaryColor:   string;
   secondaryColor: string;
-  fontFamily: string;
-  customCss: string | null;
-  updatedAt: string;
+  fontFamily:     string;
+  customCss:      string | null;
+  updatedAt:      string;
+  // Public site content
+  heroTitle?:      string | null;
+  heroSubtitle?:   string | null;
+  heroCtaText?:    string | null;
+  aboutTitle?:     string | null;
+  aboutText?:      string | null;
+  siteDescription?: string | null;
+  services?:       ServiceItem[];
+  gallery?:        GalleryItem[];
+  stats?:          StatItem[];
+  contactEmail?:   string | null;
+  contactPhone?:   string | null;
+  contactAddress?: string | null;
+  socialFacebook?:  string | null;
+  socialLinkedin?:  string | null;
+  socialInstagram?: string | null;
+  socialTwitter?:   string | null;
 }
 
 export interface BrandingUpdateRequest {
-  companyName?: string;
-  tagline?: string;
-  primaryColor?: string;
+  companyName?:    string;
+  tagline?:        string;
+  primaryColor?:   string;
   secondaryColor?: string;
-  fontFamily?: string;
-  customCss?: string;
+  fontFamily?:     string;
+  customCss?:      string;
+  tenantId?:       string;
+  // Public site content
+  heroTitle?:      string;
+  heroSubtitle?:   string;
+  heroCtaText?:    string;
+  aboutTitle?:     string;
+  aboutText?:      string;
+  siteDescription?: string;
+  servicesJson?:   string;
+  statsJson?:      string;
+  contactEmail?:   string;
+  contactPhone?:   string;
+  contactAddress?: string;
+  socialFacebook?:  string;
+  socialLinkedin?:  string;
+  socialInstagram?: string;
+  socialTwitter?:   string;
 }
 
 export type NoticeSeverity = 'INFO' | 'WARNING' | 'ERROR';
 
 export interface NoticeResponse {
-  id: string;
-  title: string;
-  body: string | null;
-  severity: NoticeSeverity;
-  active: boolean;
-  startsAt: string | null;
-  endsAt: string | null;
+  id:        string;
+  title:     string;
+  body:      string | null;
+  severity:  NoticeSeverity;
+  active:    boolean;
+  startsAt:  string | null;
+  endsAt:    string | null;
   createdAt: string;
 }
 
 export interface NoticeCreateRequest {
-  title: string;
-  body?: string;
+  title:     string;
+  body?:     string;
   severity?: NoticeSeverity;
   startsAt?: string;
-  endsAt?: string;
+  endsAt?:   string;
 }
 
-export interface PlatformStats {
-  totalTenants: number;
-  activeTenants: number;
-  totalUsers: number;
-}
-
-export interface TenantUserCount {
-  id: string;
-  name: string;
-  slug: string;
-  active: boolean;
-  userCount: number;
-}
+export interface PlatformStats      { totalTenants: number; activeTenants: number; totalUsers: number; }
+export interface TenantUserCount    { id: string; name: string; slug: string; active: boolean; userCount: number; }
 
 const CMS      = '/api/v1/cms';
 const IDENTITY = '/api/v1/identity';
@@ -66,14 +95,20 @@ const IDENTITY = '/api/v1/identity';
 export class CmsService {
   private http = inject(HttpClient);
 
-  // ── Branding ──────────────────────────────────────────────────────────────
+  // ── Branding (authenticated) ──────────────────────────────────────────────
 
   getBranding(tenantId?: string): Observable<BrandingResponse> {
     const params = tenantId ? new HttpParams().set('tenantId', tenantId) : undefined;
     return this.http.get<BrandingResponse>(`${CMS}/branding`, { params });
   }
 
-  updateBranding(req: BrandingUpdateRequest & { tenantId?: string }): Observable<BrandingResponse> {
+  /** Public endpoint — no auth token required. */
+  getPublicBranding(tenantId: string): Observable<BrandingResponse> {
+    const params = new HttpParams().set('tenantId', tenantId);
+    return this.http.get<BrandingResponse>(`${CMS}/branding/public`, { params });
+  }
+
+  updateBranding(req: BrandingUpdateRequest): Observable<BrandingResponse> {
     return this.http.put<BrandingResponse>(`${CMS}/branding`, req);
   }
 
@@ -87,6 +122,21 @@ export class CmsService {
     const fd = new FormData();
     fd.append('file', file);
     return this.http.post<BrandingResponse>(`${CMS}/branding/favicon`, fd);
+  }
+
+  // ── Gallery ───────────────────────────────────────────────────────────────
+
+  uploadGalleryImage(file: File, caption = '', alt = ''): Observable<BrandingResponse> {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('caption', caption);
+    fd.append('alt', alt);
+    return this.http.post<BrandingResponse>(`${CMS}/branding/gallery`, fd);
+  }
+
+  deleteGalleryImage(fid: string): Observable<BrandingResponse> {
+    const params = new HttpParams().set('fid', fid);
+    return this.http.delete<BrandingResponse>(`${CMS}/branding/gallery`, { params });
   }
 
   // ── Notices ───────────────────────────────────────────────────────────────

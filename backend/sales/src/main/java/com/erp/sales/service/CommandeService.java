@@ -2,7 +2,6 @@ package com.erp.sales.service;
 
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
-import com.erp.common.tenant.TenantContext;
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.CommandeDto;
 import com.erp.sales.mapper.SalesMapper;
@@ -90,6 +89,7 @@ public class CommandeService {
         livraison.setCommandeId(commande.getId());
         livraison.setReference("LIV-" + System.currentTimeMillis());
         livraison.setStatus(LivraisonStatus.PLANIFIEE);
+        livraison.setLines(new java.util.ArrayList<>());  // @Builder.Default not applied by no-args ctor
 
         for (DevisLine dl : devis.getLines()) {
             LivraisonLine ll = new LivraisonLine();
@@ -112,6 +112,6 @@ public class CommandeService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

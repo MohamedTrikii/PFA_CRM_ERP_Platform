@@ -2,7 +2,7 @@ package com.erp.sales.service;
 
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
-import com.erp.common.tenant.TenantContext;
+// removed unused TenantContext import
 import com.erp.sales.domain.CatalogProduct;
 import com.erp.sales.dto.ProductDto;
 import com.erp.sales.mapper.SalesMapper;
@@ -71,6 +71,6 @@ public class ProductService {
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

@@ -24,15 +24,11 @@ public class ReceptionEventHandler {
         TenantContext.set(event.tenantId());
         try {
             for (ReceptionConfirmedEvent.ReceptionLine line : event.lines()) {
-                stockService.recordMovement(
-                        line.productId(),
-                        line.designation(),
-                        line.locationId(),
-                        MovementType.ENTREE,
-                        line.quantiteRecue(),
-                        "BON_RECEPTION",
-                        event.bonReceptionId(),
-                        "Auto from bon-reception " + event.bonReceptionId());
+                stockService.recordMovement(new com.erp.inventory.dto.StockDto.MovementCreate(
+                    line.productId(), line.designation(), line.locationId(), MovementType.ENTREE,
+                    line.quantiteRecue(), "BON_RECEPTION", event.bonReceptionId(),
+                    "Auto from bon-reception " + event.bonReceptionId()
+                ));
             }
         } finally {
             TenantContext.clear();

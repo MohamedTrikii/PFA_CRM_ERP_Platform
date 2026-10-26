@@ -17,6 +17,12 @@ export const SHELL_ROUTES: Routes = [
       },
       // ── Admin ──────────────────────────────────────────────────────────────
       {
+        path: 'admin/references',
+        loadComponent: () =>
+          import('../features/admin/references/reference-admin.component').then(m => m.ReferenceAdminComponent),
+        canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER'])],
+      },
+      {
         path: 'admin/users',
         loadComponent: () =>
           import('../features/admin/users/user-management.component').then(m => m.UserManagementComponent),
@@ -53,6 +59,12 @@ export const SHELL_ROUTES: Routes = [
         path: 'sales/devis',
         loadComponent: () =>
           import('../features/sales/devis/devis-list.component').then(m => m.DevisListComponent),
+        canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER', 'EMPLOYEE'])],
+      },
+      {
+        path: 'sales/devis-requests',
+        loadComponent: () =>
+          import('../features/sales/devis-requests/devis-requests.component').then(m => m.DevisRequestsComponent),
         canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER', 'EMPLOYEE'])],
       },
       {
@@ -102,6 +114,12 @@ export const SHELL_ROUTES: Routes = [
         canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER', 'EMPLOYEE'])],
       },
       {
+        path: 'achats/bons-reception',
+        loadComponent: () =>
+          import('../features/achats/bon-reception-list/bon-reception-list.component').then(m => m.BonReceptionListComponent),
+        canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER', 'EMPLOYEE'])],
+      },
+      {
         path: 'achats/aging',
         loadComponent: () =>
           import('../features/achats/facture-aging/facture-aging.component').then(m => m.FactureAgingComponent),
@@ -121,13 +139,14 @@ export const SHELL_ROUTES: Routes = [
           import('../features/cms/super-admin-dashboard/super-admin-dashboard.component').then(m => m.SuperAdminDashboardComponent),
         canActivate: [roleGuard(['SUPER_ADMIN'])],
       },
-      // ── AI Assistant ──────────────────────────────────────────────────────
+      // ── AI ────────────────────────────────────────────────────────────────
       {
         path: 'ai-assistant',
         loadComponent: () =>
           import('../features/ai-assistant/ai-assistant.component').then(m => m.AiAssistantComponent),
         canActivate: [roleGuard(['SUPER_ADMIN', 'EMPLOYER', 'EMPLOYEE'])],
       },
+      { path: 'ai-dashboard', redirectTo: 'dashboard', pathMatch: 'full' },
       // ── Portal (authenticated clients) ────────────────────────────────────
       {
         path: 'portal/dashboard',

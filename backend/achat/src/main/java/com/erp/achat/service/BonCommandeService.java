@@ -8,7 +8,7 @@ import com.erp.achat.repository.FournisseurRepository;
 import com.erp.common.exception.BadRequestException;
 import com.erp.common.exception.ConflictException;
 import com.erp.common.exception.ResourceNotFoundException;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,7 +37,7 @@ public class BonCommandeService {
     private final TvaCalculationStrategy tvaCalculationStrategy;
     private final BonCommandeStatusPublisher statusPublisher;
 
-    private static UUID tid() { return UUID.fromString(TenantContext.requireTenant()); }
+    private static UUID tid() { return TenantUtils.safeTenantUuid(); }
 
     public Page<AchatDto.BonCommandeSummary> list(Pageable pageable) {
         return bonCommandeRepo.findAllByTenant(tid(), pageable).map(mapper::toBonCommandeSummary);

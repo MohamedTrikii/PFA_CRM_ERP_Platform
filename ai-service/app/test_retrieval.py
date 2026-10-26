@@ -1,7 +1,7 @@
 import os
 import asyncio
-from db import connection
-from indexer import deterministic_embedding
+from .db import connection
+from .embedder import deterministic_embedding
 
 
 async def main():

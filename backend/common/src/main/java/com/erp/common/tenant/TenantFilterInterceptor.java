@@ -31,10 +31,13 @@ public class TenantFilterInterceptor {
         String tenantId = TenantContext.get();
         if (tenantId == null || tenantId.isBlank()) return;
 
+        UUID tid = TenantUtils.parseOrNull(tenantId);
+        if (tid == null) return;
+
         try {
             Session session = entityManager.unwrap(Session.class);
             session.enableFilter(TenantEntity.FILTER_NAME)
-                   .setParameter("tenantId", UUID.fromString(tenantId));
+                   .setParameter("tenantId", tid);
         } catch (Exception ignored) {
             // If no Hibernate Session is active (e.g. non-JPA service), silently skip
         }

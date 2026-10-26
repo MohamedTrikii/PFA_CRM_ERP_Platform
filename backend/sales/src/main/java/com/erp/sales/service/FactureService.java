@@ -2,7 +2,6 @@ package com.erp.sales.service;
 
 import com.erp.common.audit.Auditable;
 import com.erp.common.audit.AuditAction;
-import com.erp.common.tenant.TenantContext;
 import com.erp.sales.domain.*;
 import com.erp.sales.dto.FactureDto;
 import com.erp.sales.mapper.SalesMapper;
@@ -17,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.UUID;
 
 @Service
@@ -63,6 +64,13 @@ public class FactureService {
         facture.setStatus(FactureStatus.BROUILLON);
         facture.setIssueDate(LocalDate.now());
         facture.setDueDate(LocalDate.now().plusDays(30));
+        // @Builder.Default fields are not initialized by the no-args constructor
+        facture.setLines(new ArrayList<>());
+        facture.setEncaissements(new ArrayList<>());
+        facture.setAmountPaid(BigDecimal.ZERO);
+
+        BigDecimal totalHt  = BigDecimal.ZERO;
+        BigDecimal totalTva = BigDecimal.ZERO;
 
         for (DevisLine dl : devis.getLines()) {
             FactureLine fl = new FactureLine();
@@ -71,12 +79,25 @@ public class FactureService {
             fl.setDescription(dl.getDescription());
             fl.setQuantity(dl.getQuantity());
             fl.setUnitPrice(dl.getUnitPrice());
-            fl.setTvaRate(dl.getTvaRate());
-            fl.setDiscountPct(dl.getDiscountPct());
+            fl.setTvaRate(dl.getTvaRate() != null ? dl.getTvaRate() : BigDecimal.ZERO);
+            fl.setDiscountPct(dl.getDiscountPct() != null ? dl.getDiscountPct() : BigDecimal.ZERO);
             facture.getLines().add(fl);
+
+            // Compute line totals here — @PrePersist fires only at flush time,
+            // so we must accumulate from raw values to get correct facture totals.
+            BigDecimal base    = dl.getQuantity().multiply(dl.getUnitPrice());
+            BigDecimal discAmt = base.multiply(fl.getDiscountPct())
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            BigDecimal lineHt  = base.subtract(discAmt).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal lineTva = lineHt.multiply(fl.getTvaRate())
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            totalHt  = totalHt.add(lineHt);
+            totalTva = totalTva.add(lineTva);
         }
 
-        recalculateTotals(facture);
+        facture.setTotalHt(totalHt);
+        facture.setTotalTva(totalTva);
+        facture.setTotalTtc(totalHt.add(totalTva));
         return mapper.toFactureResponse(factureRepo.save(facture));
     }
 
@@ -97,6 +118,7 @@ public class FactureService {
         enc.setFacture(facture);
         enc.setAmount(dto.amount());
         enc.setPaymentMethod(dto.paymentMethod());
+        enc.setPaymentDate(LocalDate.now());
         enc.setReference(dto.reference());
         enc.setNotes(dto.notes());
         facture.getEncaissements().add(enc);
@@ -113,25 +135,12 @@ public class FactureService {
         return mapper.toFactureResponse(factureRepo.save(facture));
     }
 
-    private void recalculateTotals(Facture facture) {
-        BigDecimal totalHt = BigDecimal.ZERO;
-        BigDecimal totalTva = BigDecimal.ZERO;
-        for (FactureLine l : facture.getLines()) {
-            // @PrePersist on FactureLine computes its totals; use them after trigger
-            totalHt = totalHt.add(l.getTotalHt());
-            totalTva = totalTva.add(l.getTotalTva());
-        }
-        facture.setTotalHt(totalHt);
-        facture.setTotalTva(totalTva);
-        facture.setTotalTtc(totalHt.add(totalTva));
-    }
-
     private Facture loadWithLines(UUID id) {
         return factureRepo.findByTenantAndIdWithLines(tid(), id)
                 .orElseThrow(() -> new EntityNotFoundException("Facture not found: " + id));
     }
 
     private static UUID tid() {
-        return UUID.fromString(TenantContext.requireTenant());
+        return com.erp.common.tenant.TenantUtils.safeTenantUuid();
     }
 }

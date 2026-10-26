@@ -2,7 +2,7 @@ package com.erp.crm.service;
 
 import com.erp.common.audit.AuditAction;
 import com.erp.common.audit.Auditable;
-import com.erp.common.tenant.TenantContext;
+import com.erp.common.tenant.TenantUtils;
 import com.erp.crm.domain.Prospect;
 import com.erp.crm.domain.ProspectStatus;
 import com.erp.crm.dto.ProspectDto;
@@ -16,10 +16,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class ProspectService {
 
     private final ProspectRepository repo;
@@ -38,7 +40,7 @@ public class ProspectService {
     public ProspectDto.Response create(ProspectDto.CreateRequest req) {
         Prospect p = mapper.toEntity(req);
         p.setTenantId(tenantId());
-        return mapper.toResponse(repo.save(p));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(p)));
     }
 
     @Transactional
@@ -46,7 +48,7 @@ public class ProspectService {
     public ProspectDto.Response update(UUID id, ProspectDto.UpdateRequest req) {
         Prospect p = get(id);
         mapper.updateEntity(req, p);
-        return mapper.toResponse(repo.save(p));
+        return mapper.toResponse(Objects.requireNonNull(repo.save(p)));
     }
 
     @Transactional
@@ -62,5 +64,5 @@ public class ProspectService {
             .orElseThrow(() -> new EntityNotFoundException("Prospect not found: " + id));
     }
 
-    private UUID tenantId() { return UUID.fromString(TenantContext.requireTenant()); }
+    private UUID tenantId() { return TenantUtils.safeTenantUuid(); }
 }

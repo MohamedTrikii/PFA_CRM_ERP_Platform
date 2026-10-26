@@ -1,11 +1,12 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { AsyncPipe, NgFor, NgIf }    from '@angular/common';
+import { AsyncPipe, NgFor }    from '@angular/common';
 import { MatIconModule }             from '@angular/material/icon';
 import { MatButtonModule }           from '@angular/material/button';
 import { MatTooltipModule }          from '@angular/material/tooltip';
 import { OidcSecurityService }       from 'angular-auth-oidc-client';
 import { Observable, map }           from 'rxjs';
+import { AiService }                 from '../core/services/ai.service';
 import { CmsService }                from '../core/services/cms.service';
 import { AuthContextService }        from '../core/services/auth-context.service';
 import { applyBrandingCssVars }      from '../features/cms/branding-settings/branding-settings.component';
@@ -27,7 +28,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'CRM & Prospects',  icon: 'contacts',        route: '/crm',                roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
       { label: 'Catalogue',        icon: 'category',        route: '/sales/products',     roles: ['SUPER_ADMIN','EMPLOYER'] },
-      { label: 'Devis',            icon: 'receipt_long',    route: '/sales/devis',        roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
+      { label: 'Demandes devis',   icon: 'inbox',           route: '/sales/devis-requests', roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
+      { label: 'Devis',            icon: 'receipt_long',    route: '/sales/devis',          roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
       { label: 'Commandes',        icon: 'shopping_bag',    route: '/sales/commandes',    roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
       { label: 'Factures',         icon: 'description',     route: '/sales/factures',     roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
       { label: 'Livraisons',       icon: 'local_shipping',  route: '/sales/livraisons',   roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
@@ -38,19 +40,21 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Stock',           icon: 'warehouse',       route: '/inventory/stock',      roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
       { label: 'Mouvements',     icon: 'inventory_2',     route: '/inventory/movements',  roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
-      { label: 'Fournisseurs',   icon: 'store',           route: '/achats/fournisseurs',  roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
-      { label: 'Bons commande',  icon: 'shopping_cart',   route: '/achats/bons-commande', roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
-      { label: 'Créances',       icon: 'account_balance', route: '/achats/aging',         roles: ['SUPER_ADMIN','EMPLOYER'] },
+      { label: 'Fournisseurs',    icon: 'store',           route: '/achats/fournisseurs',   roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
+      { label: 'Bons commande',  icon: 'shopping_cart',   route: '/achats/bons-commande',  roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
+      { label: 'Bons réception', icon: 'inventory',       route: '/achats/bons-reception', roles: ['SUPER_ADMIN','EMPLOYER','EMPLOYEE'] },
+      { label: 'Créances',       icon: 'account_balance', route: '/achats/aging',          roles: ['SUPER_ADMIN','EMPLOYER'] },
     ],
   },
   {
     label: 'ADMINISTRATION',
     items: [
-      { label: 'Utilisateurs',    icon: 'people',               route: '/admin/users',     roles: ['SUPER_ADMIN','EMPLOYER'] },
-      { label: 'Tenants',         icon: 'business',             route: '/admin/tenants',   roles: ['SUPER_ADMIN'] },
-      { label: "Journal d'audit", icon: 'history',              route: '/admin/audit',     roles: ['SUPER_ADMIN','EMPLOYER'] },
-      { label: 'Personnalisation',icon: 'palette',              route: '/admin/branding',  roles: ['SUPER_ADMIN','EMPLOYER'] },
-      { label: 'Plateforme',      icon: 'admin_panel_settings', route: '/admin/platform',  roles: ['SUPER_ADMIN'] },
+      { label: 'Utilisateurs',    icon: 'people',               route: '/admin/users',      roles: ['SUPER_ADMIN','EMPLOYER'] },
+      { label: 'Tenants',         icon: 'business',             route: '/admin/tenants',    roles: ['SUPER_ADMIN'] },
+      { label: "Journal d'audit", icon: 'history',              route: '/admin/audit',      roles: ['SUPER_ADMIN','EMPLOYER'] },
+      { label: 'Personnalisation',icon: 'palette',              route: '/admin/branding',   roles: ['SUPER_ADMIN','EMPLOYER'] },
+      { label: 'Référentiels',    icon: 'tune',                 route: '/admin/references', roles: ['SUPER_ADMIN','EMPLOYER'] },
+      { label: 'Plateforme',      icon: 'admin_panel_settings', route: '/admin/platform',   roles: ['SUPER_ADMIN'] },
     ],
   },
   {
@@ -66,7 +70,7 @@ const NAV_SECTIONS: NavSection[] = [
   standalone: true,
   imports: [
     RouterOutlet, RouterLink, RouterLinkActive,
-    AsyncPipe, NgFor, NgIf,
+    AsyncPipe, NgFor,
     MatIconModule, MatButtonModule, MatTooltipModule,
     NoticeBannerComponent,
   ],
@@ -357,6 +361,7 @@ export class ShellComponent implements OnInit {
   private readonly oidc        = inject(OidcSecurityService);
   private readonly cmsService  = inject(CmsService);
   private readonly authCtx     = inject(AuthContextService);
+  private readonly aiService    = inject(AiService);
 
   companyName = 'ERP Platform';
 

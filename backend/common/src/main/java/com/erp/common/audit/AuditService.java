@@ -15,6 +15,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.Objects;
 
 /**
  * Writes audit entries to the append-only hash-chained audit_log table.
@@ -54,7 +55,7 @@ public class AuditService {
             .build();
 
         try {
-            auditRepository.save(entry);
+            auditRepository.save(Objects.requireNonNull(entry));
         } catch (Exception ex) {
             // Never let audit failures break the business operation
             log.error("Failed to write audit entry action={} entity={}/{}: {}",

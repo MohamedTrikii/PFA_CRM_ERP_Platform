@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @Testcontainers
 @RequireDocker
+@SuppressWarnings({"resource","deprecation"})
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SalesFlowIT {
 

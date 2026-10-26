@@ -9,6 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.Collection;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
  * (not on the HTTP thread path) can read it.
  */
 @Component
+@ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
 public class KeycloakJwtAuthConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     @Override
@@ -34,6 +36,10 @@ public class KeycloakJwtAuthConverter implements Converter<Jwt, AbstractAuthenti
         if (tenantId != null && !tenantId.isBlank()) {
             TenantContext.set(tenantId);
         }
+
+        boolean isSuperAdmin = authorities.stream()
+                .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+        TenantContext.setSuperAdmin(isSuperAdmin);
 
         return new JwtAuthenticationToken(jwt, authorities, jwt.getSubject());
     }

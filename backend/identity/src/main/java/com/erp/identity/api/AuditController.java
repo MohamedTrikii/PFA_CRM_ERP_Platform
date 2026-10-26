@@ -22,6 +22,8 @@ public class AuditController {
 
     private final AuditRepository auditRepository;
 
+    private static final UUID SYSTEM_TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
     /**
      * SUPER_ADMIN: see all entries across all tenants.
      * EMPLOYER:    see only their own tenant's entries.
@@ -36,14 +38,18 @@ public class AuditController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to) {
 
-        boolean isSuperAdmin = TenantContext.get() == null
-            || TenantContext.get().equals("system");
-
+        boolean isSuperAdmin = TenantContext.isSuperAdmin();
         if (isSuperAdmin) {
             return auditRepository.findAllByOrderByIdDesc(pageable);
         }
 
-        UUID tenantId = UUID.fromString(TenantContext.requireTenant());
+        String tenantStr = TenantContext.get();
+        UUID tenantId;
+        try {
+            tenantId = UUID.fromString(tenantStr);
+        } catch (Exception e) {
+            tenantId = SYSTEM_TENANT;
+        }
 
         if (from != null && to != null) {
             return auditRepository

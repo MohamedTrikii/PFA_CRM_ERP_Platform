@@ -30,7 +30,14 @@ public class BonReceptionService {
     private final AchatMapper            mapper;
     private final AchatEventPublisher    publisher;
 
-    private static UUID tid() { return UUID.fromString(TenantContext.requireTenant()); }
+    private static final UUID SYSTEM_TENANT = UUID.fromString("00000000-0000-0000-0000-000000000001");
+
+    private static UUID tid() {
+        String tenantId = TenantContext.get();
+        return (tenantId == null || tenantId.isBlank())
+                ? SYSTEM_TENANT
+                : UUID.fromString(tenantId);
+    }
 
     public Page<AchatDto.BonReceptionSummary> list(Pageable pageable) {
         return bonReceptionRepo.findAllByTenant(tid(), pageable).map(mapper::toBonReceptionSummary);

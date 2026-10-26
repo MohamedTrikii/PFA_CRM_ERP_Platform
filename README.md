@@ -1,70 +1,130 @@
-# ERP Platform
+# 🏢 Multi-Tenant ERP / CRM Platform with AI
 
-Multi-tenant SaaS ERP/CRM – 100% free & open-source stack.
+> A SaaS ERP/CRM built as **Spring Boot microservices**, an **Angular** web app, a **Flutter** mobile app and a **FastAPI** AI service — sales, purchasing, inventory, CRM, customer portal, white-label CMS and AI assistance, on a **100 % free & open-source** stack.
 
-## Quick start (Phase 0)
+🇫🇷 [Version française](README.fr.md)
+
+![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?logo=springboot&logoColor=white)
+![Angular](https://img.shields.io/badge/Angular-17-DD0031?logo=angular&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-3.22-02569B?logo=flutter&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16%20+%20pgvector-4169E1?logo=postgresql&logoColor=white)
+![Keycloak](https://img.shields.io/badge/Keycloak-24-4D4D4D?logo=keycloak&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker%20Compose-22%20services-2496ED?logo=docker&logoColor=white)
+
+---
+
+## ✨ Features
+
+**Business modules**
+- **CRM** — prospects, clients, opportunities pipeline.
+- **Sales** — quotes → orders → deliveries → invoices → payments, PDF generation, quote attachments, invoice aging.
+- **Purchasing** — suppliers, purchase orders, goods receipts, VAT calculation strategies.
+- **Inventory** — products, stock locations, movements, FIFO valuation; updated **asynchronously** from delivery / receipt events (RabbitMQ).
+- **Customer portal** — public quote requests, order and invoice tracking.
+- **White-label CMS** — per-tenant branding (logo, colours), public pages (home, about, services, gallery, contact), reference-data admin.
+
+**AI service (FastAPI)**
+- **Price suggestion** for quotes, **sales forecasting** (Prophet), **quote-acceptance prediction** (XGBoost), **anomaly detection**.
+- **RAG assistant**: business documents indexed in **pgvector**, answered by a local LLM (**Ollama / Mistral 7B**), with a fallback when the model is unavailable; conversations stored per user.
+- Model training triggered from the API, tracked per tenant.
+
+**Platform**
+- **Multi-tenancy** with PostgreSQL **Row-Level Security** and tenant resolution at the gateway and in every service.
+- **Keycloak** SSO / JWT with roles `SUPER_ADMIN`, `EMPLOYER`, `EMPLOYEE`, `CLIENT`; method-level security.
+- **Observability** — Prometheus, Grafana, Loki/Promtail, Zipkin tracing.
+- **Quality** — JUnit + Testcontainers, Gatling load tests, SonarQube configuration, GitHub Actions CI.
+
+## 🧠 Architecture
+
+```mermaid
+flowchart LR
+    W[Angular 17 web app] --> GW
+    M[Flutter mobile app] --> GW
+    GW[Spring Cloud Gateway<br/>JWT · tenant header] --> ID[identity]
+    GW --> CRM[crm]
+    GW --> SA[sales]
+    GW --> INV[inventory]
+    GW --> ACH[achat]
+    GW --> CMS[cms]
+    GW --> AI[ai-service<br/>FastAPI]
+    KC[Keycloak] -. JWT .- GW
+    SA -- events --> MQ[(RabbitMQ)]
+    ACH -- events --> MQ
+    MQ --> INV
+    ID & CRM & SA & INV & ACH & CMS --> PG[(PostgreSQL 16<br/>RLS + pgvector)]
+    AI --> PG
+    AI --> OL[Ollama · Mistral 7B]
+    CMS --> S3[(SeaweedFS files)]
+```
+
+| Service | Port | Responsibility |
+|---|---|---|
+| gateway | 8443 | routing, JWT validation, tenant propagation |
+| identity | 8082 | users, roles, tenants, audit log |
+| crm | 8083 | prospects, clients, opportunities |
+| sales | 8084 | quotes, orders, deliveries, invoices, payments |
+| inventory | 8085 | products, stock, movements |
+| achat | 8086 | suppliers, purchase orders, receipts |
+| cms | 8087 | branding, public site, reference data |
+| ai-service | 8000 | pricing, forecasting, classification, RAG assistant |
+| Keycloak | 8180 | identity provider |
+
+Detailed docs: [architecture overview](docs/diagrams/ARCHITECTURE_OVERVIEW.md), [class diagram](docs/diagrams/CLASS_DIAGRAM.md), [interaction diagrams](docs/diagrams/INTERACTION_DIAGRAMS.md), [use cases](docs/diagrams/USECASE_DIAGRAM.md), [API inventory](docs/API_INVENTORY.md), [AI architecture](docs/AI_ARCHITECTURE.md), [project report](docs/PFA_REPORT.md).
+
+## 🚀 Getting started
+
+Prerequisites: Docker Desktop, Node.js 20, (optional) Flutter 3.22.
 
 ```bash
-# 1. Clone & configure
-cp .env.example .env
-# Edit .env with your passwords
+git clone https://github.com/MohamedTrikii/PFA_CRM_ERP_Platform.git
+cd PFA_CRM_ERP_Platform
+cp .env.example .env          # then set your own passwords
+```
 
-# 2. Start all infra services
-docker-compose up -d postgres valkey keycloak seaweed-master seaweed-volume seaweed-filer rabbitmq prometheus grafana
+**Windows (one command):**
 
-# 3. Wait for Keycloak to be healthy (~60s), then start services
-docker-compose up -d identity-service ai-service gateway
+```powershell
+.\start.ps1            # starts Docker Compose, waits for health checks, launches Angular
+```
 
-# 4. Verify
-curl http://localhost:8082/api/v1/identity/health   # {"status":"UP","service":"identity-service"}
-curl http://localhost:8000/api/v1/ai/health          # {"status":"UP","service":"ai-service"}
+**Linux / macOS:**
 
-# 5. Frontend (dev mode, no Docker)
-cd frontend && npm install && npm start              # http://localhost:4200
+```bash
+./start.sh
+```
 
-# 6. Mobile
+Then open **http://localhost:4200**. Demo tenants and users can be seeded with the scripts in [`scripts/`](scripts/SEED_README.md).
+
+Mobile app:
+
+```bash
 cd mobile && flutter pub get && flutter run
 ```
 
-## Service map
+## ✅ Tests
 
-| Service | URL | Notes |
-|---|---|---|
-| Keycloak | http://localhost:8080 | admin / admin_secret |
-| Gateway | http://localhost:8443 | JWT-secured entry point |
-| Identity API | http://localhost:8082 | /api/v1/identity |
-| AI Service | http://localhost:8000 | /api/v1/ai/docs |
-| Prometheus | http://localhost:9090 | |
-| Grafana | http://localhost:3001 | admin / admin_secret |
-| RabbitMQ UI | http://localhost:15672 | erp / erp_secret |
-| SeaweedFS | http://localhost:9333 | Master node |
+```bash
+cd backend && mvn test                       # unit + Testcontainers integration tests (Docker required)
+cd frontend && npm run build                 # production build
+cd ai-service && ruff check app/ && pytest   # lint + API tests
+```
 
-## Stack
+## 📁 Repository layout
 
-| Layer | Technology |
-|---|---|
-| Web | Angular 17 + Material + Tailwind + NgRx |
-| Mobile | Flutter + Riverpod + Drift (offline) |
-| Backend | Spring Boot 3.3 + Spring Cloud Gateway |
-| Auth | Keycloak 24 |
-| AI/ML | FastAPI + scikit-learn + XGBoost + Prophet |
-| DB | PostgreSQL 16 + pgvector |
-| Cache | Valkey 8 (BSD-3) |
-| Files | SeaweedFS (Apache 2.0) |
-| Messaging | RabbitMQ 3.13 |
-| Monitoring | Prometheus + Grafana 9.5 |
+```
+backend/        Spring Boot microservices (Maven multi-module) + shared kernel (common)
+frontend/       Angular 17 · Material · Tailwind · NgRx
+mobile/         Flutter · Riverpod · Drift (offline) · ML Kit OCR
+ai-service/     FastAPI · scikit-learn · XGBoost · Prophet · pgvector RAG
+infra/          Keycloak realm, Postgres init, Prometheus, Grafana, Loki, RabbitMQ, seeds
+performance/    Gatling load tests
+docs/           architecture, UML diagrams, API inventory, report, development notes
+scripts/        data seeding, SQL helpers, AI smoke tests
+```
 
-## Build order
+## 👥 Authors
 
-Phase 0 → Scaffold ✅  
-Phase 1 → Multi-tenancy + Auth  
-Phase 2 → Identity & RBAC  
-Phase 3 → Core modules (CRM/Sales/Stock)  
-Phase 4 → Quote request + Customer portal  
-Phase 5 → Dashboards + AI tiles  
-Phase 6 → Mobile (Flutter)  
-Phase 7 → Achats + Finance  
-Phase 8 → White-label CMS  
-Phase 9 → CI/CD + Hardening  
-
-See [PROGRESS.md](PROGRESS.md) and [TODO.md](TODO.md) for current status.
+- **Mohamed Triki** — [GitHub](https://github.com/MohamedTrikii)
+- Ibrahim — architecture & UML documentation

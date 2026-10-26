@@ -344,7 +344,8 @@ body {
   border: 1px solid var(--clr-border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   animation: fadeInUp .35s .08s var(--ease) both;
 }
 
@@ -398,7 +399,8 @@ body {
   border: 1px solid var(--clr-border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   animation: fadeInUp .35s .08s var(--ease) both;
 
   table {
