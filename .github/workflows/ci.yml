@@ -41,8 +41,15 @@ jobs:
       - name: Lint (ruff)
         working-directory: ai-service
         run: |
-          pip install ruff
+          pip install ruff==0.15.12
           ruff check app/
+
+      - name: API tests (pytest)
+        working-directory: ai-service
+        # Training libraries (Prophet, XGBoost, MLflow) are optional imports: tests mock them.
+        run: |
+          pip install $(grep -iE '^(fastapi|pydantic|pydantic-settings|httpx|asyncpg|numpy|prometheus-fastapi-instrumentator|python-jose)[=\[]' requirements.txt) pytest pytest-asyncio
+          pytest -q
 
   # ── Frontend: production build ──────────────────────────────────────────────
   frontend:

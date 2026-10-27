@@ -29,7 +29,7 @@
     "@ngrx/router-store": "^17.2.0",
     "angular-auth-oidc-client": "^17.0.0",
     "apexcharts": "^3.49.0",
-    "ng-apexcharts": "^1.10.0",
+    "ng-apexcharts": "~1.10.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.3"
